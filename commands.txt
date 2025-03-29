@@ -1,0 +1,7 @@
+
+In tools folder:
+cargo run -r --bin tester ./main < tools/in/0000.txt > out.txt
+
+
+Score = 3252819
+
