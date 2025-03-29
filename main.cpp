@@ -22,10 +22,10 @@ struct City;
 struct Problem;
 
 struct City {
-    int lx, rx, ly, ry;
-    int idx;  // index of the city w.r.t the problem
+    int lx{}, rx{}, ly{}, ry{};
+    int idx{};  // index of the city w.r.t the problem
 
-    int cx, cy;  // center of the coords
+    int cx{}, cy{};  // center of the coords
 };
 
 struct Problem {
@@ -44,15 +44,18 @@ struct State {
 Problem problem;  // problem data
 
 random_device rd;
-mt19937 rng(rd());
+// mt19937 rng(rd());
+
+// USING FIXED SEED:
+mt19937 rng(0);
 
 
 vector<pii> query(vector<int> &cities) {
     // queries cities and returns the results in a pair
 
     int l = cities.size();
-
-    assert(l > 1);
+    if (l == 1) return {}; // Possible to just have 1 city
+    // assert(l > 1);
 
     cout << "? " << l << ' ';
     for (int i : cities) cout << i << ' ';
@@ -97,7 +100,7 @@ public:
         // Randomly shuffle the array, then partition into those group sizes
         shuffle(indices.begin(), indices.end(), rng);
         vector<vector<int>> groups(problem.M);
-
+        //
         int cnt = 0;
         for (int i = 0; i < problem.M; i++) {
             groups[i].resize(problem.group_sizes[i]);
@@ -108,8 +111,26 @@ public:
 
         vector<vector<pii>> edges(problem.M);
         // Query, then save the edges of the MST
+        // Query the next L
+
+
         for (int i = 0; i < problem.M; i++) {
-            edges[i] = query(groups[i]);
+            int prev_group_idx = -1; // One representative node in the prev group
+            for (int j = 0; j < problem.group_sizes[i]; j += problem.L) {
+                vector<int> to_query;
+                for (int k = j; k < j + problem.L && k < problem.group_sizes[i]; k++) {
+                    to_query.push_back(groups[i][k]);
+                }
+                // Query these and add it to edges
+                vector<pii> ans = query(to_query);
+                edges[i].insert(edges[i].end(), ans.begin(), ans.end());
+
+                if (prev_group_idx != -1) {
+                    // If there's a prev group, link this component to the prev
+                    edges[i].push_back({prev_group_idx, groups[i][j]});
+                }
+                prev_group_idx = groups[i][j];
+            }
         }
 
         // Report the edges
@@ -127,7 +148,6 @@ public:
             }
         }
         cout.flush();
-
 
     }
 
@@ -156,12 +176,18 @@ int32_t main() {
     }
 
     for (int i = 0; i < problem.N; i++) {
+#ifndef DEBUG
         cin >> problem.cities[i].lx >> problem.cities[i].rx >> problem.cities[i].ly >> problem.cities[i].ry;
-        problem.cities[i].idx = i;
-
         // calculate the centers
         problem.cities[i].cx = (problem.cities[i].lx + problem.cities[i].rx) / 2;
         problem.cities[i].cy = (problem.cities[i].ly + problem.cities[i].ry) / 2;
+#else
+
+#endif
+
+        problem.cities[i].idx = i;
+
+
     }
 
     Solver solver;
