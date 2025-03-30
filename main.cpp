@@ -16,7 +16,7 @@ using namespace std;
 // const int MOD = 1000000007;
 // const int INF = 1e15;
 
-// VERSION: K-means for initial clustering, with naive mst
+// VERSION: K-means for initial clustering with 2-opt, 0.9 threshold, with naive mst
 
 
 // STRUCTS ----------------------------------------------
@@ -119,15 +119,17 @@ private:
 public:
 
     void solve() {
-        naive_mst();
+        mst();
+
+        cerr << "We have " << problem.Q - queries_used << " queries remaining to use, with L being " << problem.L << "\n";
     }
 
     void setup() {
         // setup
     }
 
-    void naive_mst() {
-        // Naive sol:
+    void mst() {
+        // Generate MST
 
         // Randomly select the groups, query the MSTs on them
         // vector<int> indices(problem.N);
@@ -155,7 +157,7 @@ public:
         // Query the next L
 
         for (int i = 0; i < problem.M; i++) {
-            int prev_group_idx = -1; // One representative node in the prev group
+            int prev_group_idx = -1; // One representative node in the prev subset
             for (int j = 0; j < problem.group_sizes[i]; j += problem.L) {
                 vector<int> to_query;
                 for (int k = j; k < j + problem.L && k < problem.group_sizes[i]; k++) {
@@ -167,7 +169,25 @@ public:
 
                 if (prev_group_idx != -1) {
                     // If there's a prev group, link this component to the prev
-                    edges[i].push_back({prev_group_idx, groups[i][j]});
+                    // edges[i].push_back({prev_group_idx, groups[i][j]});
+
+                    // TODO: implement clustering MST instead of this
+
+                    pii best_edge = {prev_group_idx, groups[i][j]};
+                    ld best_dist = LDBL_MAX;
+
+                    // Find the closest node in this group and any of the previous groups, and join them
+                    for (int this_group_idx = j; this_group_idx < j + problem.L && this_group_idx < problem.group_sizes[i]; this_group_idx++) {
+                        for (int other_group_idx = 0; other_group_idx < j; other_group_idx++) {
+                            ld new_dist = dist_center(groups[i][this_group_idx], groups[i][other_group_idx]);
+                            if (new_dist < best_dist) {
+                                best_dist = new_dist;
+                                best_edge = {groups[i][this_group_idx], groups[i][other_group_idx]};
+                            }
+                        }
+                    }
+
+                    edges[i].push_back(best_edge);
                 }
                 prev_group_idx = groups[i][j];
             }
@@ -282,61 +302,61 @@ public:
 
         // 3) 2-opt for groups
         // Calculate the total dist between a group and its center
-        vector<ld> total_dist_to_centers(problem.M);
-        for (int group_idx = 0; group_idx < problem.M; group_idx++) {
-            for (int i = 0; i < problem.group_sizes[group_idx]; i++) {
-                int city_idx = prev_groups[group_idx][i];
-                // total_dist_to_centers[group_idx] += dist(problem.cities[city_idx].cx, problem.cities[city_idx].cy, prev_group_centers[group_idx].first, prev_group_centers[group_idx].second);
-
-                // Update the group index of each city too
-                problem.cities[city_idx].group_idx = group_idx;
-                // problem.cities[city_idx].group_idx_j = i;
-            }
-        }
-
-        for (int twoopt_iter = 0; twoopt_iter < num_2opt_iters; twoopt_iter++) {
-            // TODO: loop through groups instead, not sure if it's worth it tho
-            bool swapped = false;
-            for (int city_idx1 = 0; city_idx1 < problem.N; city_idx1++) {
-                for (int city_idx2 = city_idx1 + 1; city_idx2 < problem.N; city_idx2++) {
-                    int group1 = problem.cities[city_idx1].group_idx, group2 = problem.cities[city_idx2].group_idx;
-                    if (group1 == group2) continue;
-                    // Get respective distances
-                    ld dist1_to_group1 = dist(problem.cities[city_idx1].cx, problem.cities[city_idx1].cy, prev_group_centers[group1].first, prev_group_centers[group1].second);
-                    ld dist2_to_group2 = dist(problem.cities[city_idx2].cx, problem.cities[city_idx2].cy, prev_group_centers[group2].first, prev_group_centers[group2].second);
-                    ld dist1_to_group2 = dist(problem.cities[city_idx1].cx, problem.cities[city_idx1].cy, prev_group_centers[group2].first, prev_group_centers[group2].second);
-                    ld dist2_to_group1 = dist(problem.cities[city_idx2].cx, problem.cities[city_idx2].cy, prev_group_centers[group1].first, prev_group_centers[group1].second);
-
-                    // If this swap strictly improves it, then swap these two
-                    if (dist1_to_group2 < 0.9 * dist1_to_group1 && dist2_to_group1 < 0.9 * dist2_to_group2) {
-                        // Perform the swap
-                        swapped = true;
-                        // int group1_idx_j = problem.cities[city_idx1].group_idx_j, group2_idx_j = problem.cities[city_idx2].group_idx_j;
-
-                        // swap(problem.cities[city_idx1].group_idx_j, problem.cities[city_idx2].group_idx_j);
-                        swap(problem.cities[city_idx1].group_idx, problem.cities[city_idx2].group_idx);
-                        // cerr << "swapped city indices " << city_idx1 << " " << city_idx2 << '\n';
-                    }
-                }
-            }
-
-            if (!swapped) {
-                cerr << "Stopped after " << twoopt_iter << " 2-opt iterations" << '\n';
-                break;
-            }
-        }
-
-        vector<vector<int>> opt_groups(problem.M);
-        // Reconstruct the new groups after 2-opt
-        for (int city_idx = 0; city_idx < problem.N; city_idx++) {
-            City* city = &problem.cities[city_idx];
-            opt_groups[city->group_idx].push_back(city_idx);
-        }
-
-        return opt_groups;
+        // vector<ld> total_dist_to_centers(problem.M);
+        // for (int group_idx = 0; group_idx < problem.M; group_idx++) {
+        //     for (int i = 0; i < problem.group_sizes[group_idx]; i++) {
+        //         int city_idx = prev_groups[group_idx][i];
+        //         // total_dist_to_centers[group_idx] += dist(problem.cities[city_idx].cx, problem.cities[city_idx].cy, prev_group_centers[group_idx].first, prev_group_centers[group_idx].second);
+        //
+        //         // Update the group index of each city too
+        //         problem.cities[city_idx].group_idx = group_idx;
+        //         // problem.cities[city_idx].group_idx_j = i;
+        //     }
+        // }
+        //
+        // for (int twoopt_iter = 0; twoopt_iter < num_2opt_iters; twoopt_iter++) {
+        //     // TODO: loop through groups instead, not sure if it's worth it tho
+        //     bool swapped = false;
+        //     for (int city_idx1 = 0; city_idx1 < problem.N; city_idx1++) {
+        //         for (int city_idx2 = city_idx1 + 1; city_idx2 < problem.N; city_idx2++) {
+        //             int group1 = problem.cities[city_idx1].group_idx, group2 = problem.cities[city_idx2].group_idx;
+        //             if (group1 == group2) continue;
+        //             // Get respective distances
+        //             ld dist1_to_group1 = dist(problem.cities[city_idx1].cx, problem.cities[city_idx1].cy, prev_group_centers[group1].first, prev_group_centers[group1].second);
+        //             ld dist2_to_group2 = dist(problem.cities[city_idx2].cx, problem.cities[city_idx2].cy, prev_group_centers[group2].first, prev_group_centers[group2].second);
+        //             ld dist1_to_group2 = dist(problem.cities[city_idx1].cx, problem.cities[city_idx1].cy, prev_group_centers[group2].first, prev_group_centers[group2].second);
+        //             ld dist2_to_group1 = dist(problem.cities[city_idx2].cx, problem.cities[city_idx2].cy, prev_group_centers[group1].first, prev_group_centers[group1].second);
+        //
+        //             // If this swap strictly improves it, then swap these two
+        //             if (dist1_to_group2 < 0.9 * dist1_to_group1 && dist2_to_group1 < 0.9 * dist2_to_group2) {
+        //                 // Perform the swap
+        //                 swapped = true;
+        //                 // int group1_idx_j = problem.cities[city_idx1].group_idx_j, group2_idx_j = problem.cities[city_idx2].group_idx_j;
+        //
+        //                 // swap(problem.cities[city_idx1].group_idx_j, problem.cities[city_idx2].group_idx_j);
+        //                 swap(problem.cities[city_idx1].group_idx, problem.cities[city_idx2].group_idx);
+        //                 // cerr << "swapped city indices " << city_idx1 << " " << city_idx2 << '\n';
+        //             }
+        //         }
+        //     }
+        //
+        //     if (!swapped) {
+        //         cerr << "Stopped after " << twoopt_iter << " 2-opt iterations" << '\n';
+        //         break;
+        //     }
+        // }
+        //
+        // vector<vector<int>> opt_groups(problem.M);
+        // // Reconstruct the new groups after 2-opt
+        // for (int city_idx = 0; city_idx < problem.N; city_idx++) {
+        //     City* city = &problem.cities[city_idx];
+        //     opt_groups[city->group_idx].push_back(city_idx);
+        // }
+        //
+        // return opt_groups;
         // END OF 2-OPT ---------------------------------------------------
 
-        // return prev_groups;
+        return prev_groups;
 
     }
 
@@ -398,4 +418,20 @@ int32_t main() {
 
     Solver solver;
     solver.solve();
+
+
 }
+
+
+/*
+*
+6 1 3 3 500
+6
+1375 1648 351 624
+1773 1900 3660 3787
+2922 3231 558 867
+5358 5640 8585 8867
+3218 3684 3330 3796
+3218 3684 3330 3796
+
+*/
