@@ -117,6 +117,30 @@ private:
         return a;
     }
 
+    pii generate_border_point(int BORDER_SIZE=10000) {
+        // Generates a point on the border
+        uniform_int_distribution<int> edge_gen(0, 3);
+        uniform_real_distribution<ld> pt_gen(0, BORDER_SIZE);
+
+        int edge = edge_gen(rng);
+        ld loc = pt_gen(rng);
+
+        pii pt = {0, 0};
+        // 0: bottom, 1: left, 2: top, 3: right
+        switch (edge) {
+            case 0:
+                pt = {loc, 0};
+            case 1:
+                pt = {0, loc};
+            case 2:
+                pt = {loc, BORDER_SIZE};
+            case 3:
+                pt = {BORDER_SIZE, loc};
+        }
+        return pt;
+
+    }
+
 public:
 
     void solve() {
@@ -132,68 +156,11 @@ public:
     void mst() {
         // Generate MST
 
-        // Randomly select the groups, query the MSTs on them
-        // vector<int> indices(problem.N);
-        //
-        // for (int i = 0; i < problem.N; i++) {
-        //     indices[i] = i;
-        // }
-        //
-        // // Randomly shuffle the array, then partition into those group sizes
-        // shuffle(indices.begin(), indices.end(), rng);
-        // vector<vector<int>> groups(problem.M);
-        // //
-        // int cnt = 0;
-        // for (int i = 0; i < problem.M; i++) {
-        //     groups[i].resize(problem.group_sizes[i]);
-        //     for (int j = 0; j < problem.group_sizes[i]; j++) {
-        //         groups[i][j] = indices[cnt++];
-        //     }
-        // }
-
         vector<vector<int>> groups = KMeans(50, 10);
 
         vector<vector<pii>> edges(problem.M);
         // Query, then save the edges of the MST
         // Query the next L
-
-        // NO MINI-CLUSTERING ---------------------------------------------------------------
-        // for (int i = 0; i < problem.M; i++) {
-        //     int prev_group_idx = -1; // One representative node in the prev subset
-        //     for (int j = 0; j < problem.group_sizes[i]; j += problem.L) {
-        //         vector<int> to_query;
-        //         for (int k = j; k < j + problem.L && k < problem.group_sizes[i]; k++) {
-        //             to_query.push_back(groups[i][k]);
-        //         }
-        //         // Query these and add it to edges
-        //         vector<pii> ans = query(to_query);
-        //         edges[i].insert(edges[i].end(), ans.begin(), ans.end());
-        //
-        //         if (prev_group_idx != -1) {
-        //             // If there's a prev group, link this component to the prev
-        //             // edges[i].push_back({prev_group_idx, groups[i][j]});
-        //
-        //             // TODO: implement clustering MST instead of this
-        //
-        //             pii best_edge = {prev_group_idx, groups[i][j]};
-        //             ld best_dist = LDBL_MAX;
-        //
-        //             // Find the closest node in this group and any of the previous groups, and join them
-        //             for (int this_group_idx = j; this_group_idx < j + problem.L && this_group_idx < problem.group_sizes[i]; this_group_idx++) {
-        //                 for (int other_group_idx = 0; other_group_idx < j; other_group_idx++) {
-        //                     ld new_dist = dist_center(groups[i][this_group_idx], groups[i][other_group_idx]);
-        //                     if (new_dist < best_dist) {
-        //                         best_dist = new_dist;
-        //                         best_edge = {groups[i][this_group_idx], groups[i][other_group_idx]};
-        //                     }
-        //                 }
-        //             }
-        //
-        //             edges[i].push_back(best_edge);
-        //         }
-        //         prev_group_idx = groups[i][j];
-        //     }
-        // }
 
         // WITH MINI-CLUSTERING --------------------------------------------------------
         vector<vector<vector<int>>> clustered_groups = miniClusteringKMeans(groups, 10);
@@ -234,18 +201,6 @@ public:
                 prev_group_idx = clustered_groups[i][curr_cluster_idx][0];
 
             }
-
-            // for (int j = 0; j < problem.group_sizes[i]; j += problem.L) {
-            //     vector<int> to_query;
-            //     for (int k = j; k < j + problem.L && k < problem.group_sizes[i]; k++) {
-            //         to_query.push_back(groups[i][k]);
-            //     }
-            //     // Query these and add it to edges
-            //     vector<pii> ans = query(to_query);
-            //     edges[i].insert(edges[i].end(), ans.begin(), ans.end());
-            //
-            //
-            // }
         }
 
         // Report the edges
@@ -266,7 +221,7 @@ public:
 
     }
 
-    vector<vector<int>> KMeans(int num_iters, int num_2opt_iters) {
+    vector<vector<int>> KMeans(int num_iters, int num_2opt_iters=10) {
         /* K-means approach for initial clustering, based off of estimated city centers
          *
          * Assumes that each city is in the center of its rectangle
@@ -301,7 +256,13 @@ public:
                 center_y += problem.cities[city_idx].cy;
             }
             prev_group_centers[i] = {center_x / problem.group_sizes[i], center_y / problem.group_sizes[i]};
+
+            // Initialize to a random point on the border
+            prev_group_centers[i] = generate_border_point();
+
         }
+
+
 
         // 2) Main K-means loop ----------------------------------------------------------
         for (int iter = 0; iter < num_iters; iter++) {
@@ -312,6 +273,18 @@ public:
             // Loop over the group indexes in random order, to not give preference to earliest groups
             vector<int> group_indices = generate_indices(problem.M);
             shuffle(group_indices.begin(), group_indices.end(), rng);
+
+            // Sort the group indices by the distance to its nearest border
+            // vector<ld> dist_to_border(problem.M);
+            // for (int i = 0; i < problem.M; i++) {
+            //     pii center = prev_group_centers[i];
+            //     dist_to_border[i] = min({center.first, center.second, 10000 - center.first, 10000 - center.second});
+            // }
+            //
+            // sort(group_indices.begin(), group_indices.end(), [&dist_to_border](const int i1, const int i2) {
+            //     return dist_to_border[i1] < dist_to_border[i2];
+            // });
+
 
             for (int group_idx : group_indices) {
                 vector<pair<ld, int>> distances;
@@ -344,7 +317,7 @@ public:
             bool done_flag = false;
             if (curr_groups == prev_groups) {
                 done_flag = true;
-                cerr << "Done after " << iter << " iterations\n";
+                // cerr << "Done after " << iter << " iterations\n";
             }
 
             prev_groups = curr_groups; // TODO: do I even need to store the prev group assignments?
@@ -533,21 +506,10 @@ public:
         return clustered_groups;
     }
 
-    void MCMF() {
-        // TODO: consider this more - is it even worth it?
-        /* Min Cost Max Flow + K-means
-         * This computes groups _without_ using any MST queries.
-         * Used as a first step to compute the groups
-         *
-         *
-         * Approach:
-         * Randomly initialize cluster centers
-         * Repeat:
-         *   Use MCMF to find the clusters based off dist to mean
-         *
-         *
-         *
-         */
+
+    void MST_with_clusters(vector<vector<int>> &clusters) {
+        // Given K clusters being the city indices, find the K - 1 best edges that connect these clusters
+
     }
 
 };
@@ -600,6 +562,20 @@ int32_t main() {
 *
 
 mar 30, 2025:
+allowing to run for all kmeans iterations doesn't really do anything - seems like it converges very fast
+still have very bad msts spanning the entire grid. issue with k-means?
+
+iterate through cluster centers that are near the edges **first** to prevent really bad assignments of points near border
+- issue: if it's already assigned to a really bad spot, could just be really bad, taking a lot of points near border, but the
+group center could still be near enter
+
+randomly initialize groups to be uniform? - still doesn't help
+
+What about prioritizing groups w/ very high avg dist, also incorporating a term of either
+- how far the center is from the border, or
+- how far, on avg, the points are from the border.
+
+
 next idea: use mst clusters for finding best connecting edges
 
 overlapping queries? Somehow using these to find better edges?
