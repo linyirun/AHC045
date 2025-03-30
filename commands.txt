@@ -4,6 +4,10 @@ cd ./tools
 cargo run -r --bin tester ../main < in/0000.txt > ../out.txt
 cd ..
 
+cd ./tools
+cargo run -r --bin tester ../main < in/0000.txt > /dev/null
+cd ..
+
 
 Score = 3252819
 

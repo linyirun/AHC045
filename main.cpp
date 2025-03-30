@@ -99,6 +99,13 @@ private:
         return dx * dx + dy * dy;
     }
 
+    vector<int> generate_indices(int n) {
+        // Gets indices from 0 to n - 1
+        vector<int> a(n);
+        for (int i = 0; i < n; i++) a[i] = i;
+        return a;
+    }
+
 public:
     void solve() {
         naive_mst();
@@ -130,7 +137,7 @@ public:
         //     }
         // }
 
-        vector<vector<int>> groups = KMeans(100);
+        vector<vector<int>> groups = KMeans(50);
 
         vector<vector<pii>> edges(problem.M);
         // Query, then save the edges of the MST
@@ -190,10 +197,7 @@ public:
 
 
         // 1) Randomly select clusters: --------------------------------------------------
-        vector<int> indices(problem.N);
-        for (int i = 0; i < problem.N; i++) {
-            indices[i] = i;
-        }
+        vector<int> indices = generate_indices(problem.N);
 
         // Randomly shuffle the array, then partition into those group sizes
         shuffle(indices.begin(), indices.end(), rng);
@@ -219,7 +223,11 @@ public:
             vector<vector<int>> curr_groups = prev_groups; // The current group assignments
             vector<pair<ld, ld>> curr_group_centers(problem.M);
 
-            for (int group_idx = 0; group_idx < problem.M; group_idx++) {
+            // Loop over the group indexes in random order, to not give preference to earliest groups
+            vector<int> group_indices = generate_indices(problem.M);
+            shuffle(group_indices.begin(), group_indices.end(), rng);
+
+            for (int group_idx : group_indices) {
                 vector<pair<ld, int>> distances;
                 // Find the G_k closest points
                 for (int i = 0; i < problem.N; i++) {
@@ -247,9 +255,17 @@ public:
                 curr_group_centers[group_idx] = {center_x / problem.group_sizes[group_idx], center_y / problem.group_sizes[group_idx]};
             }
 
+            bool done_flag = false;
+            if (curr_groups == prev_groups) {
+                done_flag = true;
+                cerr << "Done after " << iter << " iterations\n";
+            }
+
             prev_groups = curr_groups; // TODO: do I even need to store the prev group assignments?
             // TODO: isn't it enough to just store the final one?
             prev_group_centers = curr_group_centers;
+
+            if (done_flag) break;
         }
 
         return prev_groups;
