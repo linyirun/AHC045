@@ -12,6 +12,10 @@ cd ./tools
 cargo run -r --bin tester ../main < in/0000.txt > /dev/null
 cd ..
 
+cd ./tools
+cargo run -r --bin tester ../main < in/0001.txt
+cd ..
+
 
 Score = 3252819
 

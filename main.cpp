@@ -262,6 +262,11 @@ public:
 
         }
 
+        // Get the max group size
+        int max_group_size = 0;
+        for (int group_size : problem.group_sizes) {
+            max_group_size = max(group_size, max_group_size);
+        }
 
 
         // 2) Main K-means loop ----------------------------------------------------------
@@ -274,16 +279,44 @@ public:
             vector<int> group_indices = generate_indices(problem.M);
             shuffle(group_indices.begin(), group_indices.end(), rng);
 
-            // Sort the group indices by the distance to its nearest border
-            // vector<ld> dist_to_border(problem.M);
-            // for (int i = 0; i < problem.M; i++) {
-            //     pii center = prev_group_centers[i];
-            //     dist_to_border[i] = min({center.first, center.second, 10000 - center.first, 10000 - center.second});
-            // }
+            // Get distance of its mean to its nearest border
+            vector<ld> dist_to_border(problem.M);
+            for (int i = 0; i < problem.M; i++) {
+                pii center = prev_group_centers[i];
+                dist_to_border[i] = min({center.first, center.second, 10000 - center.first, 10000 - center.second});
+            }
             //
             // sort(group_indices.begin(), group_indices.end(), [&dist_to_border](const int i1, const int i2) {
             //     return dist_to_border[i1] < dist_to_border[i2];
             // });
+
+            // Sort group indices by average distance of a cluster to its border
+            vector<ld> avg_dist_to_center(problem.M);
+            for (int i = 0; i < problem.M; i++) {
+                pii center = prev_group_centers[i];
+                for (int j = 0; j < problem.group_sizes[i]; j++) {
+                    int city_idx = curr_groups[i][j];
+                    avg_dist_to_center[i] += dist(problem.cities[city_idx].cx, problem.cities[city_idx].cy, center.first, center.second);
+                }
+                avg_dist_to_center[i] = sqrt(avg_dist_to_center[i]);
+                avg_dist_to_center[i] /= problem.group_sizes[i];
+            }
+
+            // Get the "score" of each cluster based on how much priority it should get. lower is better
+            vector<ld> score(problem.M);
+            for (int i = 0; i < problem.M; i++) {
+                // cerr << "got here " << i << "\n";
+                // cerr << "problem M: " << problem.M << '\n';
+                score[i] = sqrt(avg_dist_to_center[i]) - 10 * problem.group_sizes[i] - 100 * exp(-dist_to_border[i] / 100);
+
+                // cerr << "score[" << i << "]: " << score[i] << '\n';
+                // cerr << "avg dist: " << avg_dist_to_center[i] << ", " <<  "group size: " << problem.group_sizes[i] << ", dist to border: " << 100 * exp(-dist_to_border[i] / 100) << '\n';
+            }
+
+            sort(group_indices.begin(), group_indices.end(), [&score](const int i1, const int i2) {
+                return score[i1] < score[i2];
+            });
+
 
 
             for (int group_idx : group_indices) {
@@ -574,6 +607,9 @@ randomly initialize groups to be uniform? - still doesn't help
 What about prioritizing groups w/ very high avg dist, also incorporating a term of either
 - how far the center is from the border, or
 - how far, on avg, the points are from the border.
+
+i think we need to use number of points close to border, with a measure of how close. current approach does well but still
+has very long edges
 
 
 next idea: use mst clusters for finding best connecting edges
