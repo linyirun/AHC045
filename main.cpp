@@ -26,6 +26,8 @@ struct Problem;
 struct City {
     int lx{}, rx{}, ly{}, ry{};
     int idx{};  // index of the city w.r.t the problem
+    int group_idx{}; // group that this city belongs to
+    int group_idx_j{}; // the index within that group that contains this city
 
     ld cx{}, cy{};  // center of the coords
 };
@@ -52,28 +54,6 @@ random_device rd;
 mt19937 rng(0);
 
 
-vector<pii> query(vector<int> &cities) {
-    // queries cities and returns the results in a pair
-
-    int l = cities.size();
-    if (l == 1) return {}; // Possible to just have 1 city
-    // assert(l > 1);
-
-    cout << "? " << l << ' ';
-    for (int i : cities) cout << i << ' ';
-    cout << '\n';
-
-    cout.flush();
-
-    // Read in the result
-    vector<pii> res(l - 1);
-    for (int i = 0; i < l - 1; i++) {
-        cin >> res[i].first >> res[i].second;
-    }
-
-    return res;
-}
-
 void answer(vector<vector<pii>> &edges) {
 
 }
@@ -84,6 +64,33 @@ void answer(vector<vector<pii>> &edges) {
 
 class Solver {
 private:
+    int queries_used = 0; // Number of queries used
+    vector<pii> query(vector<int> &cities) {
+        // Queries cities and returns the results in a vector<pii>
+        if (queries_used >= problem.Q) {
+            cerr << "Max number of queries reached!!!\n";
+            return {};
+        }
+        queries_used++;
+
+        int l = cities.size();
+        if (l == 1) return {}; // Possible to just have 1 city
+        // assert(l > 1);
+
+        cout << "? " << l << ' ';
+        for (int i : cities) cout << i << ' ';
+        cout << '\n';
+
+        cout.flush();
+
+        // Read in the result
+        vector<pii> res(l - 1);
+        for (int i = 0; i < l - 1; i++) {
+            cin >> res[i].first >> res[i].second;
+        }
+
+        return res;
+    }
 
     ld dist(ld x1, ld y1, ld x2, ld y2) {
         // computes the squared euclidean dist
@@ -107,6 +114,7 @@ private:
     }
 
 public:
+
     void solve() {
         naive_mst();
     }
@@ -137,7 +145,7 @@ public:
         //     }
         // }
 
-        vector<vector<int>> groups = KMeans(50);
+        vector<vector<int>> groups = KMeans(50, 10);
 
         vector<vector<pii>> edges(problem.M);
         // Query, then save the edges of the MST
@@ -180,7 +188,7 @@ public:
 
     }
 
-    vector<vector<int>> KMeans(int num_iters) {
+    vector<vector<int>> KMeans(int num_iters, int num_2opt_iters) {
         /* K-means approach for initial clustering, based off of estimated city centers
          *
          * Assumes that each city is in the center of its rectangle
@@ -189,7 +197,7 @@ public:
          * 2) Repeat num_iters times:
          *  2a) For each idx k cluster center, compute the G_k closest (unselected) points
          *  2b) Compute the new cluster center based off of this
-         *
+         * 3) Try 2-opt to improve clustering
          *
          * Returns:
          * size (M, G_k) 2d vec of city index assignments
@@ -268,7 +276,65 @@ public:
             if (done_flag) break;
         }
 
-        return prev_groups;
+
+        // 3) 2-opt for groups
+        // Calculate the total dist between a group and its center
+        vector<ld> total_dist_to_centers(problem.M);
+        for (int group_idx = 0; group_idx < problem.M; group_idx++) {
+            for (int i = 0; i < problem.group_sizes[group_idx]; i++) {
+                int city_idx = prev_groups[group_idx][i];
+                // total_dist_to_centers[group_idx] += dist(problem.cities[city_idx].cx, problem.cities[city_idx].cy, prev_group_centers[group_idx].first, prev_group_centers[group_idx].second);
+
+                // Update the group index of each city too
+                problem.cities[city_idx].group_idx = group_idx;
+                // problem.cities[city_idx].group_idx_j = i;
+            }
+        }
+
+        // for (int twoopt_iter = 0; twoopt_iter < num_2opt_iters; twoopt_iter++) {
+        //     // TODO: loop through groups instead, not sure if it's worth it tho
+        //     bool swapped = false;
+        //     for (int city_idx1 = 0; city_idx1 < problem.N; city_idx1++) {
+        //         for (int city_idx2 = city_idx1 + 1; city_idx2 < problem.N; city_idx2++) {
+        //             int group1 = problem.cities[city_idx1].group_idx, group2 = problem.cities[city_idx2].group_idx;
+        //             if (group1 == group2) continue;
+        //             // Get respective distances
+        //             ld dist1_to_group1 = dist(problem.cities[city_idx1].cx, problem.cities[city_idx1].cy, prev_group_centers[group1].first, prev_group_centers[group1].second);
+        //             ld dist2_to_group2 = dist(problem.cities[city_idx2].cx, problem.cities[city_idx2].cy, prev_group_centers[group2].first, prev_group_centers[group2].second);
+        //             ld dist1_to_group2 = dist(problem.cities[city_idx1].cx, problem.cities[city_idx1].cy, prev_group_centers[group2].first, prev_group_centers[group2].second);
+        //             ld dist2_to_group1 = dist(problem.cities[city_idx2].cx, problem.cities[city_idx2].cy, prev_group_centers[group1].first, prev_group_centers[group1].second);
+        //
+        //             // If this swap strictly improves it, then swap these two
+        //             if (dist1_to_group2 < 0.8 * dist1_to_group1 && dist2_to_group1 < 0.8 * dist2_to_group2) {
+        //                 // Perform the swap
+        //                 swapped = true;
+        //                 // int group1_idx_j = problem.cities[city_idx1].group_idx_j, group2_idx_j = problem.cities[city_idx2].group_idx_j;
+        //
+        //                 // swap(problem.cities[city_idx1].group_idx_j, problem.cities[city_idx2].group_idx_j);
+        //                 swap(problem.cities[city_idx1].group_idx, problem.cities[city_idx2].group_idx);
+        //                 cerr << "swapped city indices " << city_idx1 << " " << city_idx2 << '\n';
+        //             }
+        //         }
+        //     }
+        //
+        //     if (!swapped) {
+        //         cerr << "Stopped after " << twoopt_iter << " 2-opt iterations" << '\n';
+        //         break;
+        //     }
+        // }
+        //
+        // vector<vector<int>> opt_groups(problem.M);
+        // // Reconstruct the new groups after 2-opt
+        // for (int city_idx = 0; city_idx < problem.N; city_idx++) {
+        //     City* city = &problem.cities[city_idx];
+        //     opt_groups[city->group_idx].push_back(city_idx);
+        // }
+        //
+        // // return opt_groups;
+        // END OF 2-OPT ---------------------------------------------------
+
+        // return prev_groups;
+
     }
 
     void MCMF() {
