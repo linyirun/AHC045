@@ -59,6 +59,55 @@ void answer(vector<vector<pii>> &edges) {
 
 }
 
+class UnionFind {
+public:
+    vector<int> rep;
+    vector<int> rank;
+
+    UnionFind(int n) {
+        rep.resize(n);
+        rank.resize(n);
+        for (int i = 0; i < n; i++) {
+            rep[i] = i;
+            rank[i] = 0;
+        }
+    }
+
+    int get_rep(int x) {
+        // Get the representative node of x.
+        if (x == rep[x]) return x;
+        return rep[x] = get_rep(rep[x]);
+    }
+
+    int same_set(int x, int y) {
+        // Returns if x and y are in the same set.
+        int rep_x = get_rep(x);
+        int rep_y = get_rep(y);
+        return rep_x == rep_y;
+    }
+
+    bool union_sets(int x, int y) {
+        /* Union the sets containing x and y
+         * Returns false if they are already in the same set.
+         *
+         * Performs union by rank
+         */
+        int rep_x = get_rep(x);
+        int rep_y = get_rep(y);
+        if (rep_x == rep_y) return false; // already in the same set
+
+        if (rank[rep_x] < rank[rep_y]) {
+            swap(rep_x, rep_y);
+        } else if (rank[rep_x] == rank[rep_y]) {
+            rank[rep_x]++;
+        }
+        rep[rep_y] = rep_x;
+
+        return true;
+    }
+
+};
+
 
 // TODO: add a class that just runs Kruskal's given cities
 
@@ -145,6 +194,67 @@ private:
 
     }
 
+
+    vector<pii> cluster_kruskal(vector<vector<int>> &clusters) {
+        /* Given clusters of size (M, cluster_size) of city_idxs
+         * Returns a set of M - 1 edges that connect all clusters.
+         */
+
+        int M = clusters.size();
+        vector<pair<ld, pii>> edges; // List of edges {dist, {cluster1, cluster2}}
+
+        // connecting_nodes[i][j] = edge of min dist that connects these two clusters
+        vector<vector<pii>> connecting_nodes(M, vector<pii>(M));
+
+        for (int cluster1 = 0; cluster1 < M; cluster1++) {
+            for (int cluster2 = cluster1 + 1; cluster2 < M; cluster2++) {
+                // Find the min dist between these two clusters, along with the edge that does this
+                pii best_edge = {0, 0};
+                ld best_dist = LDBL_MAX;
+                for (int city_idx1 : clusters[cluster1]) {
+                    for (int city_idx2 : clusters[cluster2]) {
+                        ld curr_dist = dist_center(city_idx1, city_idx2);
+                        if (curr_dist < best_dist) {
+                            best_dist = curr_dist;
+                            best_edge = {city_idx1, city_idx2};
+                        }
+                    }
+                }
+
+                // Store this edge with its cost
+                connecting_nodes[cluster1][cluster2] = connecting_nodes[cluster2][cluster1] = best_edge;
+
+                // This is the best dist to connect cluster1 to cluster2
+                edges.push_back({best_dist, {cluster1, cluster2}});
+                // cerr << "Edge: " << cluster1 << ", " << cluster2 << '\n';
+            }
+        }
+
+        // Perform Kruskals to find the MST
+        UnionFind uf(M);
+        sort(edges.begin(), edges.end());
+
+        vector<pii> mst_edges;
+
+        // cerr << "M = " << M << ", MST edges: \n";
+        for (auto e : edges) {
+            int u = e.second.first, v = e.second.second;
+            if (uf.union_sets(u, v)) {
+                mst_edges.push_back({u, v});
+                cerr << e.second.first << ' ' << e.second.second << '\n';
+            }
+
+        }
+
+        assert(mst_edges.size() == M - 1);
+        // Get the actual edges
+        vector<pii> result(M - 1);
+        for (int i = 0; i < M - 1; i++) {
+            result[i] = connecting_nodes[mst_edges[i].first][mst_edges[i].second];
+        }
+        return result;
+    }
+
 public:
 
     void solve() {
@@ -178,33 +288,39 @@ public:
                 // Query these and add it to edges
                 vector<pii> ans = query(to_query);
                 edges[i].insert(edges[i].end(), ans.begin(), ans.end());
-                if (prev_group_idx != -1) {
-                    // If there's a prev group, link this component to the prev
-                    // edges[i].push_back({prev_group_idx, groups[i][j]});
 
-                    // TODO: implement clustering MST instead of this
-
-                    pii best_edge = {prev_group_idx, clustered_groups[i][curr_cluster_idx][0]};
-                    ld best_dist = LDBL_MAX;
-
-                    // Find the closest node in this cluster and any of the previous cluster, and join them
-                    for (int prev_cluster_idx = 0; prev_cluster_idx < curr_cluster_idx; prev_cluster_idx++) {
-                        for (int other_group_idx : clustered_groups[i][prev_cluster_idx]) {
-                            for (int this_group_idx : clustered_groups[i][curr_cluster_idx]) {
-                                ld new_dist = dist_center(this_group_idx, other_group_idx);
-                                if (new_dist < best_dist) {
-                                    best_dist = new_dist;
-                                    best_edge = {this_group_idx, other_group_idx};
-                                }
-                            }
-                        }
-                    }
-
-                    edges[i].push_back(best_edge);
-                }
-                prev_group_idx = clustered_groups[i][curr_cluster_idx][0];
+                // if (prev_group_idx != -1) {
+                //     // If there's a prev group, link this component to the prev
+                //     // edges[i].push_back({prev_group_idx, groups[i][j]});
+                //
+                //     // TODO: implement clustering MST instead of this
+                //
+                //     pii best_edge = {prev_group_idx, clustered_groups[i][curr_cluster_idx][0]};
+                //     ld best_dist = LDBL_MAX;
+                //
+                //     // Find the closest node in this cluster and any of the previous cluster, and join them
+                //     for (int prev_cluster_idx = 0; prev_cluster_idx < curr_cluster_idx; prev_cluster_idx++) {
+                //         for (int other_group_idx : clustered_groups[i][prev_cluster_idx]) {
+                //             for (int this_group_idx : clustered_groups[i][curr_cluster_idx]) {
+                //                 ld new_dist = dist_center(this_group_idx, other_group_idx);
+                //                 if (new_dist < best_dist) {
+                //                     best_dist = new_dist;
+                //                     best_edge = {this_group_idx, other_group_idx};
+                //                 }
+                //             }
+                //         }
+                //     }
+                //
+                //     edges[i].push_back(best_edge);
+                // }
+                // prev_group_idx = clustered_groups[i][curr_cluster_idx][0];
 
             }
+
+            // Run clustering MST alg to connect these subqueries
+            vector<pii> connecting_mst_edges = cluster_kruskal(clustered_groups[i]);
+            edges[i].insert(edges[i].end(), connecting_mst_edges.begin(), connecting_mst_edges.end());
+
         }
 
         // Report the edges
