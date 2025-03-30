@@ -66,6 +66,12 @@ class Solver {
 private:
     int queries_used = 0; // Number of queries used
     vector<pii> query(vector<int> &cities) {
+        int l = cities.size();
+        if (l == 1) return {}; // Possible to just have 1 city
+        // TODO: see if we have to return this in lex order
+        if (l == 2) return {{cities[0], cities[1]}};
+        // assert(l > 1);
+
         // Queries cities and returns the results in a vector<pii>
         if (queries_used >= problem.Q) {
             cerr << "Max number of queries reached!!!\n";
@@ -73,9 +79,6 @@ private:
         }
         queries_used++;
 
-        int l = cities.size();
-        if (l == 1) return {}; // Possible to just have 1 city
-        // assert(l > 1);
 
         cout << "? " << l << ' ';
         for (int i : cities) cout << i << ' ';
@@ -291,46 +294,46 @@ public:
             }
         }
 
-        // for (int twoopt_iter = 0; twoopt_iter < num_2opt_iters; twoopt_iter++) {
-        //     // TODO: loop through groups instead, not sure if it's worth it tho
-        //     bool swapped = false;
-        //     for (int city_idx1 = 0; city_idx1 < problem.N; city_idx1++) {
-        //         for (int city_idx2 = city_idx1 + 1; city_idx2 < problem.N; city_idx2++) {
-        //             int group1 = problem.cities[city_idx1].group_idx, group2 = problem.cities[city_idx2].group_idx;
-        //             if (group1 == group2) continue;
-        //             // Get respective distances
-        //             ld dist1_to_group1 = dist(problem.cities[city_idx1].cx, problem.cities[city_idx1].cy, prev_group_centers[group1].first, prev_group_centers[group1].second);
-        //             ld dist2_to_group2 = dist(problem.cities[city_idx2].cx, problem.cities[city_idx2].cy, prev_group_centers[group2].first, prev_group_centers[group2].second);
-        //             ld dist1_to_group2 = dist(problem.cities[city_idx1].cx, problem.cities[city_idx1].cy, prev_group_centers[group2].first, prev_group_centers[group2].second);
-        //             ld dist2_to_group1 = dist(problem.cities[city_idx2].cx, problem.cities[city_idx2].cy, prev_group_centers[group1].first, prev_group_centers[group1].second);
-        //
-        //             // If this swap strictly improves it, then swap these two
-        //             if (dist1_to_group2 < 0.8 * dist1_to_group1 && dist2_to_group1 < 0.8 * dist2_to_group2) {
-        //                 // Perform the swap
-        //                 swapped = true;
-        //                 // int group1_idx_j = problem.cities[city_idx1].group_idx_j, group2_idx_j = problem.cities[city_idx2].group_idx_j;
-        //
-        //                 // swap(problem.cities[city_idx1].group_idx_j, problem.cities[city_idx2].group_idx_j);
-        //                 swap(problem.cities[city_idx1].group_idx, problem.cities[city_idx2].group_idx);
-        //                 cerr << "swapped city indices " << city_idx1 << " " << city_idx2 << '\n';
-        //             }
-        //         }
-        //     }
-        //
-        //     if (!swapped) {
-        //         cerr << "Stopped after " << twoopt_iter << " 2-opt iterations" << '\n';
-        //         break;
-        //     }
-        // }
-        //
-        // vector<vector<int>> opt_groups(problem.M);
-        // // Reconstruct the new groups after 2-opt
-        // for (int city_idx = 0; city_idx < problem.N; city_idx++) {
-        //     City* city = &problem.cities[city_idx];
-        //     opt_groups[city->group_idx].push_back(city_idx);
-        // }
-        //
-        // // return opt_groups;
+        for (int twoopt_iter = 0; twoopt_iter < num_2opt_iters; twoopt_iter++) {
+            // TODO: loop through groups instead, not sure if it's worth it tho
+            bool swapped = false;
+            for (int city_idx1 = 0; city_idx1 < problem.N; city_idx1++) {
+                for (int city_idx2 = city_idx1 + 1; city_idx2 < problem.N; city_idx2++) {
+                    int group1 = problem.cities[city_idx1].group_idx, group2 = problem.cities[city_idx2].group_idx;
+                    if (group1 == group2) continue;
+                    // Get respective distances
+                    ld dist1_to_group1 = dist(problem.cities[city_idx1].cx, problem.cities[city_idx1].cy, prev_group_centers[group1].first, prev_group_centers[group1].second);
+                    ld dist2_to_group2 = dist(problem.cities[city_idx2].cx, problem.cities[city_idx2].cy, prev_group_centers[group2].first, prev_group_centers[group2].second);
+                    ld dist1_to_group2 = dist(problem.cities[city_idx1].cx, problem.cities[city_idx1].cy, prev_group_centers[group2].first, prev_group_centers[group2].second);
+                    ld dist2_to_group1 = dist(problem.cities[city_idx2].cx, problem.cities[city_idx2].cy, prev_group_centers[group1].first, prev_group_centers[group1].second);
+
+                    // If this swap strictly improves it, then swap these two
+                    if (dist1_to_group2 < 0.9 * dist1_to_group1 && dist2_to_group1 < 0.9 * dist2_to_group2) {
+                        // Perform the swap
+                        swapped = true;
+                        // int group1_idx_j = problem.cities[city_idx1].group_idx_j, group2_idx_j = problem.cities[city_idx2].group_idx_j;
+
+                        // swap(problem.cities[city_idx1].group_idx_j, problem.cities[city_idx2].group_idx_j);
+                        swap(problem.cities[city_idx1].group_idx, problem.cities[city_idx2].group_idx);
+                        // cerr << "swapped city indices " << city_idx1 << " " << city_idx2 << '\n';
+                    }
+                }
+            }
+
+            if (!swapped) {
+                cerr << "Stopped after " << twoopt_iter << " 2-opt iterations" << '\n';
+                break;
+            }
+        }
+
+        vector<vector<int>> opt_groups(problem.M);
+        // Reconstruct the new groups after 2-opt
+        for (int city_idx = 0; city_idx < problem.N; city_idx++) {
+            City* city = &problem.cities[city_idx];
+            opt_groups[city->group_idx].push_back(city_idx);
+        }
+
+        return opt_groups;
         // END OF 2-OPT ---------------------------------------------------
 
         // return prev_groups;
