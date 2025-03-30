@@ -1,7 +1,12 @@
 
 In tools folder:
-cargo run -r --bin tester ./main < tools/in/0000.txt > out.txt
+cd ./tools
+cargo run -r --bin tester ../main < in/0000.txt > ../out.txt
+cd ..
 
 
 Score = 3252819
 
+
+compiling:
+g++ -std=c++17 -O2 -Wall -o main main.cpp
