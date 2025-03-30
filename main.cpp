@@ -130,12 +130,16 @@ private:
         switch (edge) {
             case 0:
                 pt = {loc, 0};
+                break;
             case 1:
                 pt = {0, loc};
+                break;
             case 2:
                 pt = {loc, BORDER_SIZE};
+                break;
             case 3:
                 pt = {BORDER_SIZE, loc};
+                break;
         }
         return pt;
 
@@ -290,7 +294,7 @@ public:
             //     return dist_to_border[i1] < dist_to_border[i2];
             // });
 
-            // Sort group indices by average distance of a cluster to its border
+            // Calculate, for each cluster, average distance of a cluster to its border
             vector<ld> avg_dist_to_center(problem.M);
             for (int i = 0; i < problem.M; i++) {
                 pii center = prev_group_centers[i];
@@ -302,20 +306,52 @@ public:
                 avg_dist_to_center[i] /= problem.group_sizes[i];
             }
 
+            // For each cluster, count the proportion of points that are near the border
+            vector<int> num_near_border(problem.M);
+            int BORDER_THRESHOLD = 1000;
+            for (int group_idx = 0; group_idx < problem.M; group_idx++) {
+                int cnt_near = 0;
+                for (int city_idx : prev_groups[group_idx]) {
+                    int x = problem.cities[city_idx].cx;
+                    int y = problem.cities[city_idx].cy;
+                    int curr_dist = min({x, y, 10000 - x, 10000 - y});
+                    if (curr_dist <= BORDER_THRESHOLD) {
+                        cnt_near++;
+                    }
+                }
+                num_near_border[group_idx] = cnt_near;
+
+            }
+
             // Get the "score" of each cluster based on how much priority it should get. lower is better
             vector<ld> score(problem.M);
+#ifdef DEBUG
+            cerr << "kmeans iteration " << iter << '\n';
+#endif
             for (int i = 0; i < problem.M; i++) {
                 // cerr << "got here " << i << "\n";
                 // cerr << "problem M: " << problem.M << '\n';
-                score[i] = sqrt(avg_dist_to_center[i]) - 10 * problem.group_sizes[i] - 100 * exp(-dist_to_border[i] / 100);
+                // score[i] = -10 * avg_dist_to_center[i] - problem.group_sizes[i] - 100 * exp(-dist_to_border[i] / 100);
+                score[i] = -problem.group_sizes[i] - avg_dist_to_center[i] - 100 * ((ld) num_near_border[i] / problem.group_sizes[i]);
+                // score[i] = -100 * ((ld) num_near_border[i]);
 
-                // cerr << "score[" << i << "]: " << score[i] << '\n';
-                // cerr << "avg dist: " << avg_dist_to_center[i] << ", " <<  "group size: " << problem.group_sizes[i] << ", dist to border: " << 100 * exp(-dist_to_border[i] / 100) << '\n';
+#ifdef DEBUG
+                cerr << "score[" << i << "]: " << score[i] << '\n';
+                // cerr << "avg dist: " << -3 * avg_dist_to_center[i] << ", " <<  "group size: " << problem.group_sizes[i] << ", dist to border: " << 100 * exp(-dist_to_border[i] / 100) << '\n';
+                cerr << "group_size: " << problem.group_sizes[i] << ", avg_dist_to_center: " << 3 * avg_dist_to_center[i] << ", proportion near border: " << 100 * ((ld) num_near_border[i] / problem.group_sizes[i]) << '\n';
+#endif
             }
 
             sort(group_indices.begin(), group_indices.end(), [&score](const int i1, const int i2) {
                 return score[i1] < score[i2];
             });
+#ifdef DEBUG
+            cerr << "order of groups:\n";
+            for (int i = 0; i < problem.M; i++) {
+                cerr << group_indices[i] << ' ';
+            }
+            cerr << '\n';
+#endif
 
 
 
@@ -373,7 +409,7 @@ public:
         //
         //         // Update the group index of each city too
         //         problem.cities[city_idx].group_idx = group_idx;
-        //         // problem.cities[city_idx].group_idx_j = i;
+        //         problem.cities[city_idx].group_idx_j = i;
         //     }
         // }
         //
@@ -391,14 +427,36 @@ public:
         //             ld dist2_to_group1 = dist(problem.cities[city_idx2].cx, problem.cities[city_idx2].cy, prev_group_centers[group1].first, prev_group_centers[group1].second);
         //
         //             // If this swap strictly improves it, then swap these two
-        //             if (dist1_to_group2 < 0.9 * dist1_to_group1 && dist2_to_group1 < 0.9 * dist2_to_group2) {
+        //             if (dist1_to_group2 < 0.6 * dist1_to_group1 && dist2_to_group1 < 0.6 * dist2_to_group2) {
         //                 // Perform the swap
         //                 swapped = true;
-        //                 // int group1_idx_j = problem.cities[city_idx1].group_idx_j, group2_idx_j = problem.cities[city_idx2].group_idx_j;
+        //                 int group1_idx_j = problem.cities[city_idx1].group_idx_j, group2_idx_j = problem.cities[city_idx2].group_idx_j;
         //
-        //                 // swap(problem.cities[city_idx1].group_idx_j, problem.cities[city_idx2].group_idx_j);
+        //                 swap(prev_groups[group1][group1_idx_j], prev_groups[group2][group2_idx_j]);
+        //
+        //                 swap(problem.cities[city_idx1].group_idx_j, problem.cities[city_idx2].group_idx_j);
         //                 swap(problem.cities[city_idx1].group_idx, problem.cities[city_idx2].group_idx);
-        //                 // cerr << "swapped city indices " << city_idx1 << " " << city_idx2 << '\n';
+        //
+        //                 // Update the new centers
+        //                 prev_group_centers[group1] = prev_group_centers[group2] = {0, 0};
+        //                 for (int city_idx : prev_groups[group1]) {
+        //                     prev_group_centers[group1].first += problem.cities[city_idx].cx;
+        //                     prev_group_centers[group1].second += problem.cities[city_idx].cy;
+        //                 }
+        //                 prev_group_centers[group1].first /= problem.group_sizes[group1];
+        //                 prev_group_centers[group1].second /= problem.group_sizes[group1];
+        //
+        //                 for (int city_idx : prev_groups[group2]) {
+        //                     prev_group_centers[group2].first += problem.cities[city_idx].cx;
+        //                     prev_group_centers[group2].second += problem.cities[city_idx].cy;
+        //                 }
+        //                 prev_group_centers[group2].first /= problem.group_sizes[group2];
+        //                 prev_group_centers[group2].second /= problem.group_sizes[group2];
+        //
+        //
+        //
+        //
+        //                 cerr << "swapped city indices " << city_idx1 << " " << city_idx2 << ", from group " << group1 << " to " << group2 << '\n';
         //             }
         //         }
         //     }
@@ -570,14 +628,10 @@ int32_t main() {
     }
 
     for (int i = 0; i < problem.N; i++) {
-#ifndef DEBUG
         cin >> problem.cities[i].lx >> problem.cities[i].rx >> problem.cities[i].ly >> problem.cities[i].ry;
         // calculate the centers
         problem.cities[i].cx = (ld) (problem.cities[i].lx + problem.cities[i].rx) / 2;
         problem.cities[i].cy = (ld) (problem.cities[i].ly + problem.cities[i].ry) / 2;
-#else
-
-#endif
 
         problem.cities[i].idx = i;
 
