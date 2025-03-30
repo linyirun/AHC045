@@ -1,7 +1,7 @@
 
 In tools folder:
 cd ./tools
-cargo run -r --bin tester ../main < in/0000.txt > ../out.txt
+cargo run -r --bin tester ../main < in/0006.txt > ../out.txt
 cd ..
 
 cd ./tools

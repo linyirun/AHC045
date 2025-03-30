@@ -17,6 +17,7 @@ using namespace std;
 // const int INF = 1e15;
 
 // VERSION: K-means for initial clustering with 2-opt, 0.9 threshold, with naive mst
+// new: added mini-clustering within the groups too
 
 
 // STRUCTS ----------------------------------------------
@@ -156,41 +157,95 @@ public:
         // Query, then save the edges of the MST
         // Query the next L
 
+        // NO MINI-CLUSTERING ---------------------------------------------------------------
+        // for (int i = 0; i < problem.M; i++) {
+        //     int prev_group_idx = -1; // One representative node in the prev subset
+        //     for (int j = 0; j < problem.group_sizes[i]; j += problem.L) {
+        //         vector<int> to_query;
+        //         for (int k = j; k < j + problem.L && k < problem.group_sizes[i]; k++) {
+        //             to_query.push_back(groups[i][k]);
+        //         }
+        //         // Query these and add it to edges
+        //         vector<pii> ans = query(to_query);
+        //         edges[i].insert(edges[i].end(), ans.begin(), ans.end());
+        //
+        //         if (prev_group_idx != -1) {
+        //             // If there's a prev group, link this component to the prev
+        //             // edges[i].push_back({prev_group_idx, groups[i][j]});
+        //
+        //             // TODO: implement clustering MST instead of this
+        //
+        //             pii best_edge = {prev_group_idx, groups[i][j]};
+        //             ld best_dist = LDBL_MAX;
+        //
+        //             // Find the closest node in this group and any of the previous groups, and join them
+        //             for (int this_group_idx = j; this_group_idx < j + problem.L && this_group_idx < problem.group_sizes[i]; this_group_idx++) {
+        //                 for (int other_group_idx = 0; other_group_idx < j; other_group_idx++) {
+        //                     ld new_dist = dist_center(groups[i][this_group_idx], groups[i][other_group_idx]);
+        //                     if (new_dist < best_dist) {
+        //                         best_dist = new_dist;
+        //                         best_edge = {groups[i][this_group_idx], groups[i][other_group_idx]};
+        //                     }
+        //                 }
+        //             }
+        //
+        //             edges[i].push_back(best_edge);
+        //         }
+        //         prev_group_idx = groups[i][j];
+        //     }
+        // }
+
+        // WITH MINI-CLUSTERING --------------------------------------------------------
+        vector<vector<vector<int>>> clustered_groups = miniClusteringKMeans(groups, 10);
+
         for (int i = 0; i < problem.M; i++) {
             int prev_group_idx = -1; // One representative node in the prev subset
-            for (int j = 0; j < problem.group_sizes[i]; j += problem.L) {
-                vector<int> to_query;
-                for (int k = j; k < j + problem.L && k < problem.group_sizes[i]; k++) {
-                    to_query.push_back(groups[i][k]);
-                }
+            int num_clusters = clustered_groups[i].size();
+
+            for (int curr_cluster_idx = 0; curr_cluster_idx < num_clusters; curr_cluster_idx++) {
+                vector<int> to_query = clustered_groups[i][curr_cluster_idx]; // the set of cities in this mini-cluster
                 // Query these and add it to edges
                 vector<pii> ans = query(to_query);
                 edges[i].insert(edges[i].end(), ans.begin(), ans.end());
-
                 if (prev_group_idx != -1) {
                     // If there's a prev group, link this component to the prev
                     // edges[i].push_back({prev_group_idx, groups[i][j]});
 
                     // TODO: implement clustering MST instead of this
 
-                    pii best_edge = {prev_group_idx, groups[i][j]};
+                    pii best_edge = {prev_group_idx, clustered_groups[i][curr_cluster_idx][0]};
                     ld best_dist = LDBL_MAX;
 
-                    // Find the closest node in this group and any of the previous groups, and join them
-                    for (int this_group_idx = j; this_group_idx < j + problem.L && this_group_idx < problem.group_sizes[i]; this_group_idx++) {
-                        for (int other_group_idx = 0; other_group_idx < j; other_group_idx++) {
-                            ld new_dist = dist_center(groups[i][this_group_idx], groups[i][other_group_idx]);
-                            if (new_dist < best_dist) {
-                                best_dist = new_dist;
-                                best_edge = {groups[i][this_group_idx], groups[i][other_group_idx]};
+                    // Find the closest node in this cluster and any of the previous cluster, and join them
+                    for (int prev_cluster_idx = 0; prev_cluster_idx < curr_cluster_idx; prev_cluster_idx++) {
+                        for (int other_group_idx : clustered_groups[i][prev_cluster_idx]) {
+                            for (int this_group_idx : clustered_groups[i][curr_cluster_idx]) {
+                                ld new_dist = dist_center(this_group_idx, other_group_idx);
+                                if (new_dist < best_dist) {
+                                    best_dist = new_dist;
+                                    best_edge = {this_group_idx, other_group_idx};
+                                }
                             }
                         }
                     }
 
                     edges[i].push_back(best_edge);
                 }
-                prev_group_idx = groups[i][j];
+                prev_group_idx = clustered_groups[i][curr_cluster_idx][0];
+
             }
+
+            // for (int j = 0; j < problem.group_sizes[i]; j += problem.L) {
+            //     vector<int> to_query;
+            //     for (int k = j; k < j + problem.L && k < problem.group_sizes[i]; k++) {
+            //         to_query.push_back(groups[i][k]);
+            //     }
+            //     // Query these and add it to edges
+            //     vector<pii> ans = query(to_query);
+            //     edges[i].insert(edges[i].end(), ans.begin(), ans.end());
+            //
+            //
+            // }
         }
 
         // Report the edges
@@ -300,7 +355,9 @@ public:
         }
 
 
-        // 3) 2-opt for groups
+
+
+        // 4) 2-opt for groups
         // Calculate the total dist between a group and its center
         // vector<ld> total_dist_to_centers(problem.M);
         // for (int group_idx = 0; group_idx < problem.M; group_idx++) {
@@ -358,6 +415,122 @@ public:
 
         return prev_groups;
 
+    }
+
+    vector<vector<vector<int>>> miniClusteringKMeans(vector<vector<int>> &groups, int kmeans_iters) {
+        /* Given groups of size (M, G_k)
+         *
+         * For each group, perform K-means of clusters of size <= L.
+         * This will have ceil(G_k / L) clusters:
+         *   floor(G_k / L) mini-clusters of size L, 1 cluster of the rest of size G_k % L
+         *
+         * Runs the kmeans alg for kmeans_iters iterations
+         *
+         * Return a vector of:
+         * [groups][num_clusters][group assignments]
+         */
+
+        // [groups][num_clusters][group assignments]
+        vector<vector<vector<int>>> clustered_groups;
+        clustered_groups.resize(problem.M);
+
+        for (int group_idx = 0; group_idx < problem.M; group_idx++) {
+            // all the city indices in this group
+            // vector<int> indices = groups[group_idx];
+            // shuffle(indices.begin(), indices.end(), rng);
+
+            // Get the number of clusters and each clusters' size
+            int num_clusters = (problem.group_sizes[group_idx] + problem.L - 1) / problem.L;
+            vector<int> cluster_sizes(num_clusters);
+            int total = problem.group_sizes[group_idx];
+            for (int i = 0; i < num_clusters; i++) {
+                cluster_sizes[i] = min(problem.L, total);
+                total -= cluster_sizes[i];
+            }
+
+            clustered_groups[group_idx].resize(num_clusters);
+
+            // prev_clusters has size [num_clusters][size of cluster]
+            vector<vector<int>> prev_clusters(num_clusters);
+            vector<pair<ld, ld>> prev_cluster_centers(num_clusters);
+
+            // Randomly assign cluster centers
+            int cnt = 0;
+            for (int i = 0; i < num_clusters; i++) {
+                prev_clusters[i].resize(cluster_sizes[i]);
+                for (int k = 0; k < cluster_sizes[i]; k++) {
+                    // Compute the group cluster center
+                    int city_idx = groups[group_idx][cnt++]; // current city in this mini-cluster
+                    prev_clusters[i][k] = city_idx;
+                    prev_cluster_centers[i].first += problem.cities[city_idx].cx;
+                    prev_cluster_centers[i].second += problem.cities[city_idx].cy;
+                }
+
+                // Normalize the cluster cetner
+                prev_cluster_centers[i].first /= cluster_sizes[i];
+                prev_cluster_centers[i].second /= cluster_sizes[i];
+            }
+
+            for (int iter = 0; iter < kmeans_iters; iter++) {
+                vector<int> mini_cluster_indices = generate_indices(num_clusters);
+                shuffle(mini_cluster_indices.begin(), mini_cluster_indices.end(), rng);
+
+                // Indices of cities w.r.t this group that have been selected by mini-cluster already
+                vector<bool> taken_cities(problem.group_sizes[group_idx]);
+
+                vector<pair<ld, ld>> curr_cluster_centers(num_clusters);
+                vector<vector<int>> curr_clusters = prev_clusters;
+
+                for (int mini_cluster_idx : mini_cluster_indices) {
+                    // Find the cluster_sizes[mini_cluster_idx] closest cities in this group to this city center
+                    // Get all distances to non-taken cities in this group
+                    vector<pair<ld, int>> distances;
+                    for (int i = 0; i < problem.group_sizes[group_idx]; i++) {
+                        if (taken_cities[i]) continue;
+                        int city_idx = groups[group_idx][i];
+
+                        distances.push_back({
+                            dist(problem.cities[city_idx].cx, problem.cities[city_idx].cy, prev_cluster_centers[mini_cluster_idx].first, prev_cluster_centers[mini_cluster_idx].second), i
+                        });
+                    }
+
+                    sort(distances.begin(), distances.end());
+                    // Take the first cluster_sizes[mini_cluster_idx] closest cities, compute the new
+                    for (int i = 0; i < cluster_sizes[mini_cluster_idx]; i++) {
+                        int group_city_idx = distances[i].second;
+                        taken_cities[group_city_idx] = true;
+
+                        int city_idx = groups[group_idx][group_city_idx];
+                        // Update cluster assignments
+                        curr_clusters[mini_cluster_idx][i] = city_idx;
+
+                        // Update cluster center
+                        curr_cluster_centers[mini_cluster_idx].first += problem.cities[city_idx].cx;
+                        curr_cluster_centers[mini_cluster_idx].second += problem.cities[city_idx].cy;
+                    }
+
+                    // Normalize the new cluster center
+                    curr_cluster_centers[mini_cluster_idx].first /= cluster_sizes[mini_cluster_idx];
+                    curr_cluster_centers[mini_cluster_idx].second /= cluster_sizes[mini_cluster_idx];
+                }
+
+                // Update prev assignments
+                prev_cluster_centers = curr_cluster_centers;
+                bool done_flag = false; // If no changes, just break
+                // TODO: is it possible that given another random assignment of mini cluster indices, it could still improve it?
+                if (curr_clusters == prev_clusters) {
+                    done_flag = true;
+                }
+                prev_clusters = curr_clusters;
+
+                if (done_flag) break;
+            }
+
+            clustered_groups[group_idx] = prev_clusters;
+
+        }
+
+        return clustered_groups;
     }
 
     void MCMF() {
@@ -425,13 +598,10 @@ int32_t main() {
 
 /*
 *
-6 1 3 3 500
-6
-1375 1648 351 624
-1773 1900 3660 3787
-2922 3231 558 867
-5358 5640 8585 8867
-3218 3684 3330 3796
-3218 3684 3330 3796
+
+mar 30, 2025:
+next idea: use mst clusters for finding best connecting edges
+
+overlapping queries? Somehow using these to find better edges?
 
 */
