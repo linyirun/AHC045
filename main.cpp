@@ -551,10 +551,13 @@ public:
          */
 
         // Initialize all group centers (just generate random points on the border)
+        uniform_real_distribution<ld> random_pt(0, 10000);
         vector<pair<ld, ld>> prev_group_centers(problem.M);
         for (int i = 0; i < problem.M; i++) {
             // Initialize to a random point on the border
-            prev_group_centers[i] = generate_border_point();
+            // prev_group_centers[i] = generate_border_point();
+            prev_group_centers[i] = {random_pt(rng), random_pt(rng)};
+            // cerr << "group center " << i << ": " << prev_group_centers[i].first << ", " << prev_group_centers[i].second << '\n';
         }
 
         // This is where we store the group assignments
