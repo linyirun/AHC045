@@ -10,6 +10,8 @@ using namespace std;
 const int MOD = 1000000007;
 const int INF = 1e7;
 
+// TODO: make this template to support lds?
+// TODO: make this work for non-assignment problems too
 class MCMF {
 public:
     // MCMF for assignments (capacity = 1)

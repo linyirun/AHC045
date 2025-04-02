@@ -14,10 +14,139 @@ using namespace std;
 // #define int ll
 //const int MOD = 998244353;
 // const int MOD = 1000000007;
-// const int INF = 1e15;
+// const int INF = 1e7;
 
-// VERSION: K-means for initial clustering with mst for subqueries
+
+// VERSION: MCMF with bellman ford for clustering
+// K-means for initial clustering with mst for subqueries
 // mini-clustering within the groups too
+
+// MCMF
+class MCMF {
+private:
+    const ld INF = 1e18;
+public:
+    // MCMF for assignments (capacity = 1)
+    struct Edge {
+        int from, to; // u -> v
+        int capacity; // total capacity;
+        ld cost; // cost to send 1 unit of flow
+        int curr; // curr number of flow
+
+        Edge(int from, int to, int capacity, ld cost, int curr=0) : from(from), to(to), capacity(capacity), cost(cost), curr(curr) {};
+    };
+
+    vector<vector<shared_ptr<Edge>>> adj;
+    int n; // number of nodes in the graph
+    int src_idx, target_idx;
+
+    MCMF(int n, int src_idx, int target_idx, vector<vector<shared_ptr<Edge>>> &adj) {
+        /* Parameters:
+         * n: number of nodes in the graph
+         * src_idx: idx of the source node
+         * target_idx: idx of the sink
+         * adj: adjacency list of shared pointers to edges. An edge must be in both endpoints.
+         */
+        this->src_idx = src_idx;
+        this->target_idx = target_idx;
+        this->n = n;
+        this->adj = adj;
+    }
+
+    ld shortest_path() {
+        /*
+         * Finds the shortest path, sends 1 unit of flow in this path.
+         * Directly updates the edges on this path
+         *
+         * returns -1 if no path found, otherwise returns the total cost of this path
+         */
+
+        vector<ld> dist(n, INF);
+        vector<int> prev(n, -1); // Previous node that constructed this shortest path
+
+        dist[this->src_idx] = 0; // src node should have 0 dist
+
+        // Run Bellman-Ford
+        for (int iter = 0; iter < n; iter++) {
+            for (int i = 0; i < n; i++) {
+                for (shared_ptr<Edge> &edge : adj[i]) {
+                    // Test the forward edge from i->v
+                    if (edge->from == i && edge->curr < edge->capacity) {
+                        if (dist[i] + edge->cost < dist[edge->to]) {
+                            dist[edge->to] = dist[i] + edge->cost;
+                            prev[edge->to] = i;
+                        }
+                    }
+
+                    // Test the backward edge from v->i
+                    if (edge->to == i && edge->curr > 0) {
+                        if (dist[i] - edge->cost < dist[edge->from]) {
+                            dist[edge->from] = dist[i] - edge->cost;
+                            prev[edge->from] = i;
+                        }
+                    }
+                }
+            }
+        }
+
+        vector<int> nodes_in_path;
+        if (dist[this->target_idx] >= INF) {
+            return -1; // No path found
+        }
+
+        ld cost = 0;
+        // Reconstruct the shortest path, and update the edges
+        int curr_node = target_idx;
+        while (curr_node != this->src_idx) {
+            int prev_node = prev[curr_node];
+            // Find the edge
+            shared_ptr<Edge> curr_edge;
+            bool backward_edge = false;
+            for (shared_ptr<Edge> &edge : adj[curr_node]) {
+                if (edge->from == prev_node && edge->to == curr_node) {
+                    curr_edge = edge;
+                    break;
+                }
+                if (edge->from == curr_node && edge->to == prev_node) {
+                    // This is a backward edge then, should subtract
+                    backward_edge = true;
+                    curr_edge = edge;
+                    break;
+                }
+            }
+            // Assert that we found a valid path
+            assert(curr_edge);
+
+            if (backward_edge) {
+                curr_edge->curr--;
+                cost -= curr_edge->cost;
+            } else {
+                curr_edge->curr++;
+                cost += curr_edge->cost;
+            }
+
+            curr_node = prev_node;
+        }
+        return cost;
+    }
+
+
+
+    ld min_cost_max_flow() {
+        // Finds and returns the max flow
+        // Updates adj, can reconstruct the residual graph from there
+        ld total_cost = 0;
+        ld cost = 0;
+        int cnt = 0;
+        while ((cost = shortest_path()) != -1) {
+            total_cost += cost;
+            cerr << "Done shortest_path iter " << cnt << '\n';
+            cnt++;
+        }
+
+        return total_cost;
+    }
+};
 
 
 // STRUCTS ----------------------------------------------
@@ -144,7 +273,7 @@ private:
         return res;
     }
 
-    ld dist(ld x1, ld y1, ld x2, ld y2) {
+    static ld dist(ld x1, ld y1, ld x2, ld y2) {
         // computes the squared euclidean dist
         ld dx = x1 - x2;
         ld dy = y1 - y2;
@@ -269,7 +398,8 @@ public:
     void mst() {
         // Generate MST
 
-        vector<vector<int>> groups = KMeans(50, 10);
+        // vector<vector<int>> groups = KMeans(50, 10);
+        vector<vector<int>> groups = mcmf_clustering(10);
 
         vector<vector<pii>> edges(problem.M);
         // Query, then save the edges of the MST
@@ -337,6 +467,115 @@ public:
             }
         }
         cout.flush();
+
+    }
+
+    vector<vector<int>> mcmf_clustering(int num_iters) {
+        /* Uses K-means with mcmf for better clustering
+         * Does a max of num_iters soft K-means
+         *
+         */
+
+        // Initialize all group centers (just generate random points on the border)
+        vector<pair<ld, ld>> prev_group_centers(problem.M);
+        for (int i = 0; i < problem.M; i++) {
+            // Initialize to a random point on the border
+            prev_group_centers[i] = generate_border_point();
+        }
+
+        // This is where we store the group assignments
+        vector<vector<int>> prev_groups(problem.M);
+        for (int group_idx = 0; group_idx < problem.M; group_idx++) {
+            prev_groups[group_idx].resize(problem.group_sizes[group_idx]);
+        }
+
+        // Main k-means loop --------------------------------------------------------
+        for (int iter = 0; iter < num_iters; iter++) {
+
+            // Construct the graph for flows
+            int num_flow_nodes = problem.N + problem.M + 2;
+            vector<vector<shared_ptr<MCMF::Edge>>> adj(problem.N + problem.M + 2);
+
+            for (int city_idx = 0; city_idx < problem.N; city_idx++) {
+                for (int group_idx = 0; group_idx < problem.M; group_idx++) {
+                    // Cost of this edge [city_idx][group_idx] will be the distance between this city and the city center
+                    City *city_ptr = &problem.cities[city_idx];
+                    ld dist_to_center = dist(city_ptr->cx, city_ptr->cy, prev_group_centers[group_idx].first, prev_group_centers[group_idx].second);
+
+                    int flow_city_idx = 1 + city_idx;
+                    int flow_group_idx = 1 + problem.N + group_idx;
+                    shared_ptr<MCMF::Edge> edge = make_shared<MCMF::Edge>(flow_city_idx, flow_group_idx, 1, dist_to_center);
+
+                    adj[flow_city_idx].push_back(edge);
+                    adj[flow_group_idx].push_back(edge);
+                }
+            }
+
+            // Connect src to cities, groups to sink
+            int src_idx = 0;
+            int sink_idx = problem.N + problem.M + 1;
+            for (int city_idx = 0; city_idx < problem.N; city_idx++) {
+                int flow_city_idx = 1 + city_idx;
+                shared_ptr<MCMF::Edge> edge = make_shared<MCMF::Edge>(src_idx, flow_city_idx, 1, 0);
+                adj[src_idx].push_back(edge);
+                adj[flow_city_idx].push_back(edge);
+            }
+            for (int group_idx = 0; group_idx < problem.M; group_idx++) {
+                int flow_group_idx = 1 + problem.N + group_idx;
+                // Make this edge with capacity group_size
+                shared_ptr<MCMF::Edge> edge = make_shared<MCMF::Edge>(flow_group_idx, sink_idx, problem.group_sizes[group_idx], 0);
+                adj[flow_group_idx].push_back(edge);
+                adj[sink_idx].push_back(edge);
+            }
+
+            // Setup and perform MCMF
+            MCMF mcmf_obj(num_flow_nodes, src_idx, sink_idx, adj);
+            mcmf_obj.min_cost_max_flow();
+
+            // Get the assignments of cities to groups
+            vector<int> city_to_group_assignments(problem.N);
+            for (int city_idx = 0; city_idx < problem.N; city_idx++) {
+                int flow_city_idx = 1 + city_idx;
+                for (shared_ptr<MCMF::Edge> &edge : adj[flow_city_idx]) {
+                    // If this node is the beginning of edge and there's flow, then this is assigned
+                    if (edge->from == flow_city_idx && edge->curr > 0) {
+                        int assigned_group_idx = edge->to - problem.N - 1;
+                        city_to_group_assignments[city_idx] = assigned_group_idx;
+                        break;
+                    }
+                }
+            }
+
+            // Construct the groups again
+            vector<vector<int>> curr_groups(problem.M);
+            for (int city_idx = 0; city_idx < problem.N; city_idx++) {
+                curr_groups[city_to_group_assignments[city_idx]].push_back(city_idx);
+            }
+
+            bool done_flag = false;
+            if (prev_groups == curr_groups) {
+                cerr << "Done MCMF K-means after " << iter << " iterations.\n";
+                done_flag = true;
+            }
+            cerr << "Done MCMF iteration " << iter << '\n';
+
+            // Recalculate the group centers
+            vector<pair<ld, ld>> curr_group_centers(problem.M);
+            for (int group_idx = 0; group_idx < problem.M; group_idx++) {
+                ld center_x = 0, center_y = 0;
+                for (int city_idx : curr_groups[group_idx]) {
+                    center_x += problem.cities[city_idx].cx;
+                    center_y += problem.cities[city_idx].cy;
+                }
+                curr_group_centers[group_idx] = {center_x, center_y};
+            }
+
+            prev_group_centers = curr_group_centers;
+            prev_groups = curr_groups;
+            if (done_flag) break;
+        }
+
+        return prev_groups;
 
     }
 
