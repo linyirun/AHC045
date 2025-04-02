@@ -16,8 +16,8 @@ using namespace std;
 // const int MOD = 1000000007;
 // const int INF = 1e15;
 
-// VERSION: K-means for initial clustering with 2-opt, 0.9 threshold, with naive mst
-// new: added mini-clustering within the groups too
+// VERSION: K-means for initial clustering with mst for subqueries
+// mini-clustering within the groups too
 
 
 // STRUCTS ----------------------------------------------
@@ -109,7 +109,6 @@ public:
 };
 
 
-// TODO: add a class that just runs Kruskal's given cities
 
 
 class Solver {
@@ -750,8 +749,6 @@ int32_t main() {
         problem.cities[i].cy = (ld) (problem.cities[i].ly + problem.cities[i].ry) / 2;
 
         problem.cities[i].idx = i;
-
-
     }
 
     Solver solver;
@@ -785,5 +782,11 @@ has very long edges
 next idea: use mst clusters for finding best connecting edges
 
 overlapping queries? Somehow using these to find better edges?
+
+
+apr 1st:
+todo: implement MCMF
+
+
 
 */
