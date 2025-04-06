@@ -474,7 +474,7 @@ public:
         // Generate MST
 
         // vector<vector<int>> groups = KMeans(50, 10);
-        vector<vector<int>> groups = mcmf_clustering(3);
+        vector<vector<int>> groups = mcmf_clustering(10);
 
         vector<vector<pii>> edges(problem.M);
         // Query, then save the edges of the MST
@@ -483,7 +483,7 @@ public:
         // WITH MINI-CLUSTERING --------------------------------------------------------
         // vector<vector<vector<int>>> clustered_groups = miniClusteringKMeans(groups, 10);
         // cout << "Got here3\n";
-        vector<vector<vector<int>>> clustered_groups = mcmf_mini_clustering(groups, 3);
+        vector<vector<vector<int>>> clustered_groups = mcmf_mini_clustering(groups, 10);
 
         for (int i = 0; i < problem.M; i++) {
             int prev_group_idx = -1; // One representative node in the prev subset
@@ -572,72 +572,75 @@ public:
         // Main k-means loop --------------------------------------------------------
         for (int iter = 0; iter < num_iters; iter++) {
 
-            // Construct the graph for flows
-            int num_flow_nodes = problem.N + problem.M + 2;
-            vector<vector<shared_ptr<MCMF::Edge>>> adj(num_flow_nodes);
-
-            for (int city_idx = 0; city_idx < problem.N; city_idx++) {
-                for (int group_idx = 0; group_idx < problem.M; group_idx++) {
-                    // Cost of this edge [city_idx][group_idx] will be the distance between this city and the city center
-                    City *city_ptr = &problem.cities[city_idx];
-                    ld dist_to_center = dist(city_ptr->cx, city_ptr->cy, prev_group_centers[group_idx].first, prev_group_centers[group_idx].second);
-
-                    int flow_city_idx = 1 + city_idx;
-                    int flow_group_idx = 1 + problem.N + group_idx;
-                    shared_ptr<MCMF::Edge> edge = make_shared<MCMF::Edge>(flow_city_idx, flow_group_idx, 1, dist_to_center);
-
-                    adj[flow_city_idx].push_back(edge);
-                    adj[flow_group_idx].push_back(edge);
-                }
-            }
-
-            // Connect src to cities, groups to sink
-            int src_idx = 0;
-            int sink_idx = problem.N + problem.M + 1;
-            for (int city_idx = 0; city_idx < problem.N; city_idx++) {
-                int flow_city_idx = 1 + city_idx;
-                shared_ptr<MCMF::Edge> edge = make_shared<MCMF::Edge>(src_idx, flow_city_idx, 1, 0);
-                adj[src_idx].push_back(edge);
-                adj[flow_city_idx].push_back(edge);
-            }
-            for (int group_idx = 0; group_idx < problem.M; group_idx++) {
-                int flow_group_idx = 1 + problem.N + group_idx;
-                // Make this edge with capacity group_size
-                shared_ptr<MCMF::Edge> edge = make_shared<MCMF::Edge>(flow_group_idx, sink_idx, problem.group_sizes[group_idx], 0);
-                adj[flow_group_idx].push_back(edge);
-                adj[sink_idx].push_back(edge);
-            }
-
-            // Setup and perform MCMF
-            MCMF mcmf_obj(num_flow_nodes, src_idx, sink_idx, adj);
-            mcmf_obj.min_cost_max_flow();
-
-            // Get the assignments of cities to groups
-            vector<int> city_to_group_assignments(problem.N);
-            for (int city_idx = 0; city_idx < problem.N; city_idx++) {
-                int flow_city_idx = 1 + city_idx;
-                for (shared_ptr<MCMF::Edge> &edge : adj[flow_city_idx]) {
-                    // If this node is the beginning of edge and there's flow, then this is assigned
-                    if (edge->from == flow_city_idx && edge->curr > 0) {
-                        int assigned_group_idx = edge->to - problem.N - 1;
-                        city_to_group_assignments[city_idx] = assigned_group_idx;
-                        break;
-                    }
-                }
-            }
-
-            // Construct the groups again
-            vector<vector<int>> curr_groups(problem.M);
-            for (int city_idx = 0; city_idx < problem.N; city_idx++) {
-                curr_groups[city_to_group_assignments[city_idx]].push_back(city_idx);
-            }
-
+            // // Construct the graph for flows
+            // int num_flow_nodes = problem.N + problem.M + 2;
+            // vector<vector<shared_ptr<MCMF::Edge>>> adj(num_flow_nodes);
+            //
+            // for (int city_idx = 0; city_idx < problem.N; city_idx++) {
+            //     for (int group_idx = 0; group_idx < problem.M; group_idx++) {
+            //         // Cost of this edge [city_idx][group_idx] will be the distance between this city and the city center
+            //         City *city_ptr = &problem.cities[city_idx];
+            //         ld dist_to_center = dist(city_ptr->cx, city_ptr->cy, prev_group_centers[group_idx].first, prev_group_centers[group_idx].second);
+            //
+            //         int flow_city_idx = 1 + city_idx;
+            //         int flow_group_idx = 1 + problem.N + group_idx;
+            //         shared_ptr<MCMF::Edge> edge = make_shared<MCMF::Edge>(flow_city_idx, flow_group_idx, 1, dist_to_center);
+            //
+            //         adj[flow_city_idx].push_back(edge);
+            //         adj[flow_group_idx].push_back(edge);
+            //     }
+            // }
+            //
+            // // Connect src to cities, groups to sink
+            // int src_idx = 0;
+            // int sink_idx = problem.N + problem.M + 1;
+            // for (int city_idx = 0; city_idx < problem.N; city_idx++) {
+            //     int flow_city_idx = 1 + city_idx;
+            //     shared_ptr<MCMF::Edge> edge = make_shared<MCMF::Edge>(src_idx, flow_city_idx, 1, 0);
+            //     adj[src_idx].push_back(edge);
+            //     adj[flow_city_idx].push_back(edge);
+            // }
+            // for (int group_idx = 0; group_idx < problem.M; group_idx++) {
+            //     int flow_group_idx = 1 + problem.N + group_idx;
+            //     // Make this edge with capacity group_size
+            //     shared_ptr<MCMF::Edge> edge = make_shared<MCMF::Edge>(flow_group_idx, sink_idx, problem.group_sizes[group_idx], 0);
+            //     adj[flow_group_idx].push_back(edge);
+            //     adj[sink_idx].push_back(edge);
+            // }
+            //
+            // // Setup and perform MCMF
+            // MCMF mcmf_obj(num_flow_nodes, src_idx, sink_idx, adj);
+            // mcmf_obj.min_cost_max_flow();
+            //
+            // // Get the assignments of cities to groups
+            // vector<int> city_to_group_assignments(problem.N);
+            // for (int city_idx = 0; city_idx < problem.N; city_idx++) {
+            //     int flow_city_idx = 1 + city_idx;
+            //     for (shared_ptr<MCMF::Edge> &edge : adj[flow_city_idx]) {
+            //         // If this node is the beginning of edge and there's flow, then this is assigned
+            //         if (edge->from == flow_city_idx && edge->curr > 0) {
+            //             int assigned_group_idx = edge->to - problem.N - 1;
+            //             city_to_group_assignments[city_idx] = assigned_group_idx;
+            //             break;
+            //         }
+            //     }
+            // }
+            //
+            // // Construct the groups again
+            // vector<vector<int>> curr_groups(problem.M);
+            // for (int city_idx = 0; city_idx < problem.N; city_idx++) {
+            //     curr_groups[city_to_group_assignments[city_idx]].push_back(city_idx);
+            // }
+            vector<int> city_indices = generate_indices(problem.N);
+            vector<int> group_sizes = problem.group_sizes;
+            vector<vector<int>> curr_groups = general_mcmf(city_indices, group_sizes, prev_group_centers, -1);
             bool done_flag = false;
             if (prev_groups == curr_groups) {
                 cerr << "Done MCMF K-means after " << iter << " iterations.\n";
                 done_flag = true;
             }
             // cerr << "Done MCMF iteration " << iter << '\n';
+
 
             // Recalculate the group centers
             vector<pair<ld, ld>> curr_group_centers(problem.M);
@@ -704,7 +707,7 @@ public:
                 for (int k = 0; k < cluster_sizes[i]; k++) {
                     // Compute the group cluster center
                     int city_idx = groups[group_idx][cnt++]; // current city in this mini-cluster
-                    // prev_clusters[i][k] = city_idx;
+                    prev_clusters[i][k] = city_idx;
                     prev_cluster_centers[i].first += problem.cities[city_idx].cx;
                     prev_cluster_centers[i].second += problem.cities[city_idx].cy;
                 }
@@ -718,72 +721,80 @@ public:
             // TODO: make this work for max number of L
             for (int iter = 0; iter < kmeans_iters; iter++) {
                 // Construct the graph for flows
-                int num_flow_nodes = problem.group_sizes[group_idx] + num_clusters + 2;
-                vector<vector<shared_ptr<MCMF::Edge>>> adj(num_flow_nodes);
+                // int num_flow_nodes = problem.group_sizes[group_idx] + num_clusters + 2;
+                // vector<vector<shared_ptr<MCMF::Edge>>> adj(num_flow_nodes);
+                //
+                // for (int i = 0; i < problem.group_sizes[group_idx]; i++) {
+                //     int city_idx = groups[group_idx][i];
+                //     for (int cluster_idx = 0; cluster_idx < num_clusters; cluster_idx++) {
+                //         // Cost of this edge [city_idx][cluster_idx] will be the distance between this city and the city center
+                //         City *city_ptr = &problem.cities[city_idx];
+                //         ld dist_to_center = dist(city_ptr->cx, city_ptr->cy, prev_cluster_centers[cluster_idx].first, prev_cluster_centers[cluster_idx].second);
+                //
+                //         int flow_city_idx = 1 + i;
+                //         int flow_group_idx = 1 + problem.group_sizes[group_idx] + cluster_idx;
+                //         shared_ptr<MCMF::Edge> edge = make_shared<MCMF::Edge>(flow_city_idx, flow_group_idx, 1, dist_to_center);
+                //
+                //         adj[flow_city_idx].push_back(edge);
+                //         adj[flow_group_idx].push_back(edge);
+                //     }
+                // }
+                //
+                // // Connect src to cities, groups to sink
+                // int src_idx = 0;
+                // int sink_idx = 1 + problem.group_sizes[group_idx] + num_clusters;
+                // for (int i = 0; i < problem.group_sizes[group_idx]; i++) {
+                //     // int city_idx = groups[group_idx][i];
+                //     int flow_city_idx = 1 + i;
+                //     shared_ptr<MCMF::Edge> edge = make_shared<MCMF::Edge>(src_idx, flow_city_idx, 1, 0);
+                //     adj[src_idx].push_back(edge);
+                //     adj[flow_city_idx].push_back(edge);
+                // }
+                // for (int cluster_idx = 0; cluster_idx < num_clusters; cluster_idx++) {
+                //     int flow_group_idx = 1 + problem.group_sizes[group_idx] + cluster_idx;
+                //     // Make this edge with capacity of this cluster's size
+                //     shared_ptr<MCMF::Edge> edge = make_shared<MCMF::Edge>(flow_group_idx, sink_idx, cluster_sizes[cluster_idx], 0);
+                //     adj[flow_group_idx].push_back(edge);
+                //     adj[sink_idx].push_back(edge);
+                // }
+                //
+                // // Setup and perform MCMF
+                // MCMF mcmf_obj(num_flow_nodes, src_idx, sink_idx, adj);
+                // mcmf_obj.min_cost_max_flow();
+                //
+                //
+                // // Get the assignments of cities to groups
+                // vector<int> city_to_group_assignments(problem.group_sizes[group_idx]);
+                // for (int i = 0; i < problem.group_sizes[group_idx]; i++) {
+                //     // int city_idx = groups[group_idx][i];
+                //     int flow_city_idx = 1 + i;
+                //     for (shared_ptr<MCMF::Edge> &edge : adj[flow_city_idx]) {
+                //         // If this node is the beginning of edge and there's flow, then this is assigned
+                //         if (edge->from == flow_city_idx && edge->curr > 0) {
+                //             int assigned_group_idx = edge->to - problem.group_sizes[group_idx] - 1;
+                //             city_to_group_assignments[i] = assigned_group_idx;
+                //             break;
+                //         }
+                //     }
+                // }
+                // // cout << "Got here\n";
+                // // exit(0);
+                //
+                // // Construct the groups again
+                // vector<vector<int>> curr_clusters(num_clusters);
+                // for (int i = 0; i < problem.group_sizes[group_idx]; i++) {
+                //     int city_idx = groups[group_idx][i];
+                //     curr_clusters[city_to_group_assignments[i]].push_back(city_idx);
+                //     // cerr << "city_idx " << city_idx << " pushed to cluster " << city_to_group_assignments[i] << '\n';
+                // }
 
+                vector<int> city_indices(problem.group_sizes[group_idx]);
                 for (int i = 0; i < problem.group_sizes[group_idx]; i++) {
-                    int city_idx = groups[group_idx][i];
-                    for (int cluster_idx = 0; cluster_idx < num_clusters; cluster_idx++) {
-                        // Cost of this edge [city_idx][cluster_idx] will be the distance between this city and the city center
-                        City *city_ptr = &problem.cities[city_idx];
-                        ld dist_to_center = dist(city_ptr->cx, city_ptr->cy, prev_cluster_centers[cluster_idx].first, prev_cluster_centers[cluster_idx].second);
-
-                        int flow_city_idx = 1 + i;
-                        int flow_group_idx = 1 + problem.group_sizes[group_idx] + cluster_idx;
-                        shared_ptr<MCMF::Edge> edge = make_shared<MCMF::Edge>(flow_city_idx, flow_group_idx, 1, dist_to_center);
-
-                        adj[flow_city_idx].push_back(edge);
-                        adj[flow_group_idx].push_back(edge);
-                    }
+                    city_indices[i] = groups[group_idx][i];
                 }
 
-                // Connect src to cities, groups to sink
-                int src_idx = 0;
-                int sink_idx = 1 + problem.group_sizes[group_idx] + num_clusters;
-                for (int i = 0; i < problem.group_sizes[group_idx]; i++) {
-                    // int city_idx = groups[group_idx][i];
-                    int flow_city_idx = 1 + i;
-                    shared_ptr<MCMF::Edge> edge = make_shared<MCMF::Edge>(src_idx, flow_city_idx, 1, 0);
-                    adj[src_idx].push_back(edge);
-                    adj[flow_city_idx].push_back(edge);
-                }
-                for (int cluster_idx = 0; cluster_idx < num_clusters; cluster_idx++) {
-                    int flow_group_idx = 1 + problem.group_sizes[group_idx] + cluster_idx;
-                    // Make this edge with capacity of this cluster's size
-                    shared_ptr<MCMF::Edge> edge = make_shared<MCMF::Edge>(flow_group_idx, sink_idx, cluster_sizes[cluster_idx], 0);
-                    adj[flow_group_idx].push_back(edge);
-                    adj[sink_idx].push_back(edge);
-                }
-
-                // Setup and perform MCMF
-                MCMF mcmf_obj(num_flow_nodes, src_idx, sink_idx, adj);
-                mcmf_obj.min_cost_max_flow();
-
-
-                // Get the assignments of cities to groups
-                vector<int> city_to_group_assignments(problem.group_sizes[group_idx]);
-                for (int i = 0; i < problem.group_sizes[group_idx]; i++) {
-                    // int city_idx = groups[group_idx][i];
-                    int flow_city_idx = 1 + i;
-                    for (shared_ptr<MCMF::Edge> &edge : adj[flow_city_idx]) {
-                        // If this node is the beginning of edge and there's flow, then this is assigned
-                        if (edge->from == flow_city_idx && edge->curr > 0) {
-                            int assigned_group_idx = edge->to - problem.group_sizes[group_idx] - 1;
-                            city_to_group_assignments[i] = assigned_group_idx;
-                            break;
-                        }
-                    }
-                }
-                // cout << "Got here\n";
-                // exit(0);
-
-                // Construct the groups again
-                vector<vector<int>> curr_clusters(num_clusters);
-                for (int i = 0; i < problem.group_sizes[group_idx]; i++) {
-                    int city_idx = groups[group_idx][i];
-                    curr_clusters[city_to_group_assignments[i]].push_back(city_idx);
-                    // cerr << "city_idx " << city_idx << " pushed to cluster " << city_to_group_assignments[i] << '\n';
-                }
+                vector<vector<int>> curr_clusters = general_mcmf(city_indices, cluster_sizes, prev_cluster_centers, -1);
+                curr_clusters = convert_city_indices(curr_clusters, city_indices);
 
                 bool done_flag = false;
                 if (prev_clusters == curr_clusters) {
@@ -829,6 +840,8 @@ public:
          * Returns:
          * N x (max cluster_sizes[i]) array of assignments
          * - if mx_edges != 1, some city_indices may not be assigned to a cluster.
+         *
+         * Note: returns the indices with respect to city_indices. need to turn it back to city_indices afterwards
          */
 
 
@@ -856,12 +869,12 @@ public:
                 // Cost of this edge [city_idx][group_idx] will be the distance between this city and the city center
                 City *city_ptr = &problem.cities[city_indices[city_idx]];
                 ld dist_to_center = dist(city_ptr->cx, city_ptr->cy, prev_cluster_centers[cluster_idx].first, prev_cluster_centers[cluster_idx].second);
-                dist_to_cluster_center.push_back({dist_to_center, cluster_idx});
+                dist_to_cluster_center[cluster_idx] = {dist_to_center, cluster_idx};
             }
 
             sort(dist_to_cluster_center.begin(), dist_to_cluster_center.end());
             // Only take the mx_edges closest clusters
-            for (int idx = 0; idx < min(num_clusters, (int) dist_to_cluster_center.size()); idx++) {
+            for (int idx = 0; idx < min((int) dist_to_cluster_center.size(), mx_edges); idx++) {
                 int cluster_idx = dist_to_cluster_center[idx].second;
                 ld dist_to_center = dist_to_cluster_center[idx].first;
                 int flow_city_idx = 1 + city_idx;
@@ -881,7 +894,7 @@ public:
         for (int group_idx = 0; group_idx < num_clusters; group_idx++) {
             int flow_group_idx = 1 + num_cities + group_idx;
             // Make this edge with capacity group_size
-            shared_ptr<MCMF::Edge> edge = make_shared<MCMF::Edge>(flow_group_idx, sink_idx, problem.group_sizes[group_idx], 0);
+            shared_ptr<MCMF::Edge> edge = make_shared<MCMF::Edge>(flow_group_idx, sink_idx, cluster_sizes[group_idx], 0);
             adj[flow_group_idx].push_back(edge);
             adj[sink_idx].push_back(edge);
         }
@@ -897,7 +910,7 @@ public:
             for (shared_ptr<MCMF::Edge> &edge : adj[flow_city_idx]) {
                 // If this node is the beginning of edge and there's flow, then this is assigned
                 if (edge->from == flow_city_idx && edge->curr > 0) {
-                    int assigned_group_idx = edge->to - problem.N - 1;
+                    int assigned_group_idx = edge->to - num_cities - 1;
                     city_to_group_assignments[city_idx] = assigned_group_idx;
                     break;
                 }
@@ -910,9 +923,24 @@ public:
             curr_groups[city_to_group_assignments[city_idx]].push_back(city_idx);
         }
 
-        // TODO: if there's any unassigned cities, then re-run this algorithm, only on those unassigned
-        return curr_groups;
+        // These curr_group indices are with respect to the current indices.
 
+        // TODO: if there's any unassigned cities, then re-run this algorithm, only on those unassigned
+
+
+
+        return curr_groups;
+    }
+
+    vector<vector<int>> convert_city_indices(vector<vector<int>> &cluster, vector<int> &city_indices) {
+        // Turns clusters that have indices w.r.t city_indices into the actual city indices
+        vector<vector<int>> actual_indices = cluster;
+        for (int i = 0; i < cluster.size(); i++) {
+            for (int j = 0; j < cluster[i].size(); j++) {
+                actual_indices[i][j] = city_indices[cluster[i][j]];
+            }
+        }
+        return actual_indices;
     }
 
     vector<vector<int>> KMeans(int num_iters, int num_2opt_iters=10) {
