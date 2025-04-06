@@ -53,155 +53,172 @@ public:
         this->adj = adj;
     }
 
-    // ld shortest_path() {
-    //     /*
-    //      * Finds the shortest path, sends 1 unit of flow in this path.
-    //      * Directly updates the edges on this path
-    //      *
-    //      * returns -1 if no path found, otherwise returns the total cost of this path
-    //      */
-    //
-    //     vector<ld> dist(n, INF);
-    //     vector<int> prev(n, -1); // Previous node that constructed this shortest path
-    //
-    //     dist[this->src_idx] = 0; // src node should have 0 dist
-    //
-    //     // Run Bellman-Ford
-    //     for (int iter = 0; iter < n; iter++) {
-    //         for (int i = 0; i < n; i++) {
-    //             for (shared_ptr<Edge> &edge : adj[i]) {
-    //                 // Test the forward edge from i->v
-    //                 if (edge->from == i && edge->curr < edge->capacity) {
-    //                     if (dist[i] + edge->cost < dist[edge->to]) {
-    //                         dist[edge->to] = dist[i] + edge->cost;
-    //                         prev[edge->to] = i;
-    //                     }
-    //                 }
-    //
-    //                 // Test the backward edge from v->i
-    //                 if (edge->to == i && edge->curr > 0) {
-    //                     if (dist[i] - edge->cost < dist[edge->from]) {
-    //                         dist[edge->from] = dist[i] - edge->cost;
-    //                         prev[edge->from] = i;
-    //                     }
-    //                 }
-    //             }
-    //         }
-    //     }
-    //
-    //     vector<int> nodes_in_path;
-    //     if (dist[this->target_idx] >= INF) {
-    //         return -1; // No path found
-    //     }
-    //
-    //     ld cost = 0;
-    //     // Reconstruct the shortest path, and update the edges
-    //     int curr_node = target_idx;
-    //     while (curr_node != this->src_idx) {
-    //         int prev_node = prev[curr_node];
-    //         // Find the edge
-    //         shared_ptr<Edge> curr_edge;
-    //         bool backward_edge = false;
-    //         for (shared_ptr<Edge> &edge : adj[curr_node]) {
-    //             if (edge->from == prev_node && edge->to == curr_node) {
-    //                 curr_edge = edge;
-    //                 break;
-    //             }
-    //             if (edge->from == curr_node && edge->to == prev_node) {
-    //                 // This is a backward edge then, should subtract
-    //                 backward_edge = true;
-    //                 curr_edge = edge;
-    //                 break;
-    //             }
-    //         }
-    //         // Assert that we found a valid path
-    //         assert(curr_edge);
-    //
-    //         if (backward_edge) {
-    //             curr_edge->curr--;
-    //             cost -= curr_edge->cost;
-    //         } else {
-    //             curr_edge->curr++;
-    //             cost += curr_edge->cost;
-    //         }
-    //
-    //         curr_node = prev_node;
-    //     }
-    //     return cost;
-    // }
-
-    // TODO: check potentials again
     ld shortest_path(vector<ld> &pi) {
-    /*
-     * Finds the shortest path using Dijkstra with potentials (Johnson's algorithm)
-     * Sends 1 unit of flow along this path and updates edge flows and costs
-     *
-     * returns -1 if no path is found, otherwise returns total cost of the path
-     */
-        using T = pair<ld, int>; // (distance, node)
-        priority_queue<T, vector<T>, greater<T>> pq;
+        /*
+         * Finds the shortest path, sends 1 unit of flow in this path.
+         * Directly updates the edges on this path
+         *
+         * returns -1 if no path found, otherwise returns the total cost of this path
+         */
+
+        // TODO: check stability using ld?
 
         vector<ld> dist(n, INF);
-        vector<int> prev(n, -1); // previous node
-        vector<shared_ptr<Edge>> how(n, nullptr); // edge used to reach node
+        vector<int> prev(n, -1); // Previous node that constructed this shortest path
 
-        dist[src_idx] = 0;
-        pq.emplace(0, src_idx);
+        dist[this->src_idx] = 0; // src node should have 0 dist
+
+        // Given potentials pi, use Dijkstra to find the shortest path
+        priority_queue<pair<ld, int>, vector<pair<ld, int>>, greater<pair<ld, int>>> pq;
+        pq.push({0, this->src_idx});
 
         while (!pq.empty()) {
-            auto [d, u] = pq.top(); pq.pop();
-            if (d > dist[u]) continue;
+            auto [curr_dist, node] = pq.top();
+            pq.pop();
+            if (curr_dist > dist[node]) continue;
 
-            for (auto &e : adj[u]) {
+            for (shared_ptr<Edge> &edge : adj[node]) {
                 // Forward edge
-                if (e->from == u && e->curr < e->capacity) {
-                    int v = e->to;
-                    ld reduced_cost = e->cost + pi[u] - pi[v];
-                    if (dist[u] + reduced_cost < dist[v]) {
-                        dist[v] = dist[u] + reduced_cost;
-                        prev[v] = u;
-                        how[v] = e;
-                        pq.emplace(dist[v], v);
+                if (edge->from == node && edge->curr < edge->capacity) {
+                    ld new_dist = curr_dist + edge->cost + pi[edge->from] - pi[edge->to];
+                    if (new_dist < dist[edge->to]) {
+                        dist[edge->to] = new_dist;
+                        prev[edge->to] = node;
+                        pq.push({new_dist, edge->to});
                     }
                 }
+
                 // Backward edge
-                if (e->to == u && e->curr > 0) {
-                    int v = e->from;
-                    ld reduced_cost = -e->cost + pi[u] - pi[v];
-                    if (dist[u] + reduced_cost < dist[v]) {
-                        dist[v] = dist[u] + reduced_cost;
-                        prev[v] = u;
-                        how[v] = e;
-                        pq.emplace(dist[v], v);
+                if (edge->to == node && edge->curr > 0) {
+                    ld new_dist = curr_dist + (-edge->cost + pi[edge->from] - pi[edge->to]);
+                    if (new_dist < dist[edge->to]) {
+                        dist[edge->to] = new_dist;
+                        prev[edge->to] = node;
+                        pq.push({new_dist, edge->to});
                     }
                 }
             }
         }
 
-        if (dist[target_idx] >= INF) return -1;
-
-        // Update potentials
+        // Update the potentials
         for (int i = 0; i < n; i++) {
-            if (dist[i] < INF) pi[i] += dist[i];
+            pi[i] += dist[i];
         }
 
-        // Update edges along the path
-        ld path_cost = 0;
-        int curr = target_idx;
-        while (curr != src_idx) {
-            auto e = how[curr];
-            int u = prev[curr];
-            if (e->from == u && e->to == curr) {
-                e->curr++;
-                path_cost += e->cost;
-            } else {
-                e->curr--;
-                path_cost -= e->cost;
-            }
-            curr = u;
+        vector<int> nodes_in_path;
+        if (dist[this->target_idx] >= INF) {
+            return -1; // No path found
         }
-        return path_cost;
+
+        ld cost = 0;
+        // Reconstruct the shortest path, and update the edges
+        int curr_node = target_idx;
+        while (curr_node != this->src_idx) {
+            int prev_node = prev[curr_node];
+            // Find the edge
+            shared_ptr<Edge> curr_edge;
+            bool backward_edge = false;
+            for (shared_ptr<Edge> &edge : adj[curr_node]) {
+                if (edge->from == prev_node && edge->to == curr_node) {
+                    curr_edge = edge;
+                    break;
+                }
+                if (edge->from == curr_node && edge->to == prev_node) {
+                    // This is a backward edge then, should subtract
+                    backward_edge = true;
+                    curr_edge = edge;
+                    break;
+                }
+            }
+            // Assert that we found a valid path
+            assert(curr_edge);
+
+            if (backward_edge) {
+                curr_edge->curr--;
+                cost -= curr_edge->cost;
+            } else {
+                curr_edge->curr++;
+                cost += curr_edge->cost;
+            }
+
+            curr_node = prev_node;
+        }
+        return cost;
     }
+
+    // TODO: check potentials again
+    // ld shortest_path(vector<ld> &pi) {
+    // /*
+    //  * Finds the shortest path using Dijkstra with potentials (Johnson's algorithm)
+    //  * Sends 1 unit of flow along this path and updates edge flows and costs
+    //  *
+    //  * returns -1 if no path is found, otherwise returns total cost of the path
+    //  */
+    //     using T = pair<ld, int>; // (distance, node)
+    //     priority_queue<T, vector<T>, greater<T>> pq;
+    //
+    //     vector<ld> dist(n, INF);
+    //     vector<int> prev(n, -1); // previous node
+    //     vector<shared_ptr<Edge>> how(n, nullptr); // edge used to reach node
+    //
+    //     dist[src_idx] = 0;
+    //     pq.emplace(0, src_idx);
+    //
+    //     while (!pq.empty()) {
+    //         auto [d, u] = pq.top();
+    //         pq.pop();
+    //         if (d > dist[u]) continue;
+    //
+    //         for (auto &e : adj[u]) {
+    //             // Forward edge
+    //             if (e->from == u && e->curr < e->capacity) {
+    //                 int v = e->to;
+    //                 ld reduced_cost = e->cost + pi[u] - pi[v];
+    //                 if (dist[u] + reduced_cost < dist[v]) {
+    //                     dist[v] = dist[u] + reduced_cost;
+    //                     prev[v] = u;
+    //                     how[v] = e;
+    //                     pq.emplace(dist[v], v);
+    //                 }
+    //             }
+    //             // Backward edge
+    //             if (e->to == u && e->curr > 0) {
+    //                 int v = e->from;
+    //                 ld reduced_cost = -e->cost + pi[u] - pi[v];
+    //                 if (dist[u] + reduced_cost < dist[v]) {
+    //                     dist[v] = dist[u] + reduced_cost;
+    //                     prev[v] = u;
+    //                     how[v] = e;
+    //                     pq.emplace(dist[v], v);
+    //                 }
+    //             }
+    //         }
+    //     }
+    //
+    //     if (dist[target_idx] >= INF) return -1;
+    //
+    //     // Update potentials
+    //     for (int i = 0; i < n; i++) {
+    //         if (dist[i] < INF) pi[i] += dist[i];
+    //     }
+    //
+    //     // Update edges along the path
+    //     ld path_cost = 0;
+    //     int curr = target_idx;
+    //     while (curr != src_idx) {
+    //         auto e = how[curr];
+    //         int u = prev[curr];
+    //         if (e->from == u && e->to == curr) {
+    //             e->curr++;
+    //             path_cost += e->cost;
+    //         } else {
+    //             e->curr--;
+    //             path_cost -= e->cost;
+    //         }
+    //         curr = u;
+    //     }
+    //     return path_cost;
+    // }
 
 
 
@@ -211,7 +228,36 @@ public:
         ld total_cost = 0;
         ld cost = 0;
         int cnt = 0;
-        vector<ld> pi(n, 0);
+        vector<ld> pi(n, INF);
+        vector<int> prev(n, -1);
+
+        // Run Bellman-Ford to calculate a potential
+
+        pi[this->src_idx] = 0; // src node should have 0 dist
+
+        // Run Bellman-Ford
+        for (int iter = 0; iter < n; iter++) {
+            for (int i = 0; i < n; i++) {
+                for (shared_ptr<Edge> &edge : adj[i]) {
+                    // Test the forward edge from i->v
+                    if (edge->from == i && edge->curr < edge->capacity) {
+                        if (pi[i] + edge->cost < pi[edge->to]) {
+                            pi[edge->to] = pi[i] + edge->cost;
+                            prev[edge->to] = i;
+                        }
+                    }
+
+                    // Test the backward edge from v->i
+                    if (edge->to == i && edge->curr > 0) {
+                        if (pi[i] - edge->cost < pi[edge->from]) {
+                            pi[edge->from] = pi[i] - edge->cost;
+                            prev[edge->from] = i;
+                        }
+                    }
+                }
+            }
+        }
+
         while ((cost = shortest_path(pi)) != -1) {
             total_cost += cost;
             // cerr << "Done shortest_path iter " << cnt << '\n';
@@ -574,7 +620,7 @@ public:
             // Run MCMF
             vector<int> city_indices = generate_indices(problem.N);
             vector<int> group_sizes = problem.group_sizes;
-            vector<vector<int>> curr_groups = general_mcmf(city_indices, group_sizes, prev_group_centers, -1);
+            vector<vector<int>> curr_groups = general_mcmf(city_indices, group_sizes, prev_group_centers, 15);
             bool done_flag = false;
             if (prev_groups == curr_groups) {
                 cerr << "Done MCMF K-means after " << iter << " iterations.\n";
@@ -667,7 +713,7 @@ public:
                     city_indices[i] = groups[group_idx][i];
                 }
 
-                vector<vector<int>> curr_clusters = general_mcmf(city_indices, cluster_sizes, prev_cluster_centers, -1);
+                vector<vector<int>> curr_clusters = general_mcmf(city_indices, cluster_sizes, prev_cluster_centers, 15);
                 curr_clusters = convert_city_indices(curr_clusters, city_indices);
 
                 bool done_flag = false;
@@ -702,7 +748,7 @@ public:
     }
 
 
-    vector<vector<int>> general_mcmf(vector<int> &city_indices, vector<int> &cluster_sizes, vector<pair<ld, ld>> &prev_cluster_centers, int mx_edges=-1) {
+    vector<vector<int>> general_mcmf(vector<int> &city_indices, vector<int> &cluster_sizes, vector<pair<ld, ld>> &prev_cluster_centers, int mx_edges=-1, int depth=0) {
         /* Performs general mcmf for clustering
          * Performs only 1 loop
          *
@@ -718,6 +764,9 @@ public:
          * Note: returns the indices with respect to city_indices. need to turn it back to city_indices afterwards
          */
 
+        cerr << "Currently evaluating |city_indices| = " << city_indices.size() << ", |cluster_sizes| = " << cluster_sizes.size() << '\n';
+        cerr << "curr depth is " << depth << '\n';
+        depth++;
 
         int num_cities = city_indices.size();
         int num_clusters = cluster_sizes.size();
@@ -792,14 +841,51 @@ public:
         }
 
         // Construct the groups again
+        // These curr_group indices are with respect to the current indices.
+        vector<int> unassigned_cities;
         vector<vector<int>> curr_groups(num_clusters);
         for (int city_idx = 0; city_idx < num_cities; city_idx++) {
-            curr_groups[city_to_group_assignments[city_idx]].push_back(city_idx);
+            if (city_to_group_assignments[city_idx] != -1) {
+                curr_groups[city_to_group_assignments[city_idx]].push_back(city_idx);
+            } else {
+                unassigned_cities.push_back(city_idx);
+            }
         }
 
-        // These curr_group indices are with respect to the current indices.
-
         // TODO: if there's any unassigned cities, then re-run this algorithm, only on those unassigned
+        // Create the new group sizes based off of any group that has space
+
+        // Maps ind to new cluster ind
+        vector<int> new_cluster_sizes;
+        vector<int> ind_to_cluster_ind;
+        // Cluster centers of the available groups
+        vector<pair<ld, ld>> cluster_centers_available;
+
+        // actual city indexes of the city_idx
+        vector<int> actual_unassigned_cities_idx = convert_city_indices(unassigned_cities, city_indices);
+
+        for (int cluster_idx = 0; cluster_idx < num_clusters; cluster_idx++) {
+            int sz = cluster_sizes[cluster_idx] - curr_groups[cluster_idx].size();
+            if (sz > 0) {
+                ind_to_cluster_ind.push_back(cluster_idx);
+                new_cluster_sizes.push_back(sz);
+                cluster_centers_available.push_back(prev_cluster_centers[cluster_idx]);
+            }
+        }
+
+        if (!unassigned_cities.empty()) {
+            vector<vector<int>> new_assignments = general_mcmf(actual_unassigned_cities_idx, new_cluster_sizes, prev_cluster_centers, mx_edges, depth);
+            // Convert it back and put it into the valid group
+            for (int new_cluster_idx = 0; new_cluster_idx < new_cluster_sizes.size(); new_cluster_idx++) {
+                int actual_cluster_idx = ind_to_cluster_ind[new_cluster_idx];
+                // Convert the city index into the proper ones, with respect to this city's indices
+                vector<int> this_city_inds = convert_city_indices(new_assignments[new_cluster_idx], unassigned_cities);
+                for (int ind : this_city_inds) {
+                    curr_groups[actual_cluster_idx].push_back(ind);
+                }
+            }
+        }
+
         return curr_groups;
     }
 
@@ -810,6 +896,14 @@ public:
             for (int j = 0; j < cluster[i].size(); j++) {
                 actual_indices[i][j] = city_indices[cluster[i][j]];
             }
+        }
+        return actual_indices;
+    }
+    vector<int> convert_city_indices(vector<int> &cluster, vector<int> &city_indices) {
+        // Turns clusters that have indices w.r.t city_indices into the actual city indices
+        vector<int> actual_indices = cluster;
+        for (int i = 0; i < cluster.size(); i++) {
+            actual_indices[i] = city_indices[cluster[i]];
         }
         return actual_indices;
     }
