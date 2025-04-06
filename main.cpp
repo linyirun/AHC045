@@ -53,7 +53,101 @@ public:
         this->adj = adj;
     }
 
-    ld shortest_path(vector<ld> &pi) {
+    // TODO: finish implementing this potential verison
+    // ld shortest_path(vector<ld> &pi) {
+    //     /*
+    //      * Finds the shortest path, sends 1 unit of flow in this path.
+    //      * Directly updates the edges on this path
+    //      *
+    //      * returns -1 if no path found, otherwise returns the total cost of this path
+    //      */
+    //
+    //     // TODO: check stability using ld?
+    //
+    //     vector<ld> dist(n, INF);
+    //     vector<int> prev(n, -1); // Previous node that constructed this shortest path
+    //
+    //     dist[this->src_idx] = 0; // src node should have 0 dist
+    //
+    //     // Given potentials pi, use Dijkstra to find the shortest path
+    //     priority_queue<pair<ld, int>, vector<pair<ld, int>>, greater<pair<ld, int>>> pq;
+    //     pq.push({0, this->src_idx});
+    //
+    //     while (!pq.empty()) {
+    //         auto [curr_dist, node] = pq.top();
+    //         pq.pop();
+    //         if (curr_dist > dist[node]) continue;
+    //
+    //         for (shared_ptr<Edge> &edge : adj[node]) {
+    //             // Forward edge
+    //             if (edge->from == node && edge->curr < edge->capacity) {
+    //                 ld new_dist = curr_dist + edge->cost + pi[edge->from] - pi[edge->to];
+    //                 if (new_dist < dist[edge->to]) {
+    //                     dist[edge->to] = new_dist;
+    //                     prev[edge->to] = node;
+    //                     pq.push({new_dist, edge->to});
+    //                 }
+    //             }
+    //
+    //             // Backward edge
+    //             if (edge->to == node && edge->curr > 0) {
+    //                 ld new_dist = curr_dist + (-edge->cost + pi[edge->from] - pi[edge->to]);
+    //                 if (new_dist < dist[edge->to]) {
+    //                     dist[edge->to] = new_dist;
+    //                     prev[edge->to] = node;
+    //                     pq.push({new_dist, edge->to});
+    //                 }
+    //             }
+    //         }
+    //     }
+    //
+    //     // Update the potentials
+    //     for (int i = 0; i < n; i++) {
+    //         pi[i] += dist[i];
+    //     }
+    //
+    //     vector<int> nodes_in_path;
+    //     if (dist[this->target_idx] >= INF) {
+    //         return -1; // No path found
+    //     }
+    //
+    //     ld cost = 0;
+    //     // Reconstruct the shortest path, and update the edges
+    //     int curr_node = target_idx;
+    //     while (curr_node != this->src_idx) {
+    //         int prev_node = prev[curr_node];
+    //         // Find the edge
+    //         shared_ptr<Edge> curr_edge;
+    //         bool backward_edge = false;
+    //         for (shared_ptr<Edge> &edge : adj[curr_node]) {
+    //             if (edge->from == prev_node && edge->to == curr_node) {
+    //                 curr_edge = edge;
+    //                 break;
+    //             }
+    //             if (edge->from == curr_node && edge->to == prev_node) {
+    //                 // This is a backward edge then, should subtract
+    //                 backward_edge = true;
+    //                 curr_edge = edge;
+    //                 break;
+    //             }
+    //         }
+    //         // Assert that we found a valid path
+    //         assert(curr_edge);
+    //
+    //         if (backward_edge) {
+    //             curr_edge->curr--;
+    //             cost -= curr_edge->cost;
+    //         } else {
+    //             curr_edge->curr++;
+    //             cost += curr_edge->cost;
+    //         }
+    //
+    //         curr_node = prev_node;
+    //     }
+    //     return cost;
+    // }
+
+        ld shortest_path(vector<ld> &pi) {
         /*
          * Finds the shortest path, sends 1 unit of flow in this path.
          * Directly updates the edges on this path
@@ -61,15 +155,13 @@ public:
          * returns -1 if no path found, otherwise returns the total cost of this path
          */
 
-        // TODO: check stability using ld?
-
         vector<ld> dist(n, INF);
         vector<int> prev(n, -1); // Previous node that constructed this shortest path
 
         dist[this->src_idx] = 0; // src node should have 0 dist
 
-        // Given potentials pi, use Dijkstra to find the shortest path
-        priority_queue<pair<ld, int>, vector<pair<ld, int>>, greater<pair<ld, int>>> pq;
+        priority_queue<pair<ld, int>, vector<pair<ld, int>>, greater<>> pq;
+        vector<shared_ptr<Edge>> how(n); // edge we used to get here
         pq.push({0, this->src_idx});
 
         while (!pq.empty()) {
@@ -80,21 +172,23 @@ public:
             for (shared_ptr<Edge> &edge : adj[node]) {
                 // Forward edge
                 if (edge->from == node && edge->curr < edge->capacity) {
-                    ld new_dist = curr_dist + edge->cost + pi[edge->from] - pi[edge->to];
+                    ld new_dist = curr_dist + edge->cost + pi[node] - pi[edge->to];
                     if (new_dist < dist[edge->to]) {
                         dist[edge->to] = new_dist;
                         prev[edge->to] = node;
+                        how[edge->to] = edge;
                         pq.push({new_dist, edge->to});
                     }
                 }
 
                 // Backward edge
                 if (edge->to == node && edge->curr > 0) {
-                    ld new_dist = curr_dist + (-edge->cost + pi[edge->from] - pi[edge->to]);
-                    if (new_dist < dist[edge->to]) {
-                        dist[edge->to] = new_dist;
-                        prev[edge->to] = node;
-                        pq.push({new_dist, edge->to});
+                    ld new_dist = curr_dist + (-edge->cost + pi[node] - pi[edge->from]);
+                    if (new_dist < dist[edge->from]) {
+                        dist[edge->from] = new_dist;
+                        prev[edge->from] = node;
+                        how[edge->from] = edge;
+                        pq.push({new_dist, edge->from});
                     }
                 }
             }
@@ -102,9 +196,11 @@ public:
 
         // Update the potentials
         for (int i = 0; i < n; i++) {
-            pi[i] += dist[i];
+            // cerr << "dist[" << i << "]: " << dist[i] << '\n';
+            if (dist[i] < INF - 1e-3) {
+                pi[i] += dist[i];
+            }
         }
-
         vector<int> nodes_in_path;
         if (dist[this->target_idx] >= INF) {
             return -1; // No path found
@@ -118,18 +214,21 @@ public:
             // Find the edge
             shared_ptr<Edge> curr_edge;
             bool backward_edge = false;
-            for (shared_ptr<Edge> &edge : adj[curr_node]) {
-                if (edge->from == prev_node && edge->to == curr_node) {
-                    curr_edge = edge;
-                    break;
-                }
-                if (edge->from == curr_node && edge->to == prev_node) {
-                    // This is a backward edge then, should subtract
-                    backward_edge = true;
-                    curr_edge = edge;
-                    break;
-                }
-            }
+            // for (shared_ptr<Edge> &edge : adj[curr_node]) {
+            //     if (edge->from == prev_node && edge->to == curr_node) {
+            //         curr_edge = edge;
+            //         break;
+            //     }
+            //     if (edge->from == curr_node && edge->to == prev_node) {
+            //         // This is a backward edge then, should subtract
+            //         backward_edge = true;
+            //         curr_edge = edge;
+            //         break;
+            //     }
+            // }
+            curr_edge = how[curr_node];
+            if (curr_edge->from == prev_node) backward_edge = false;
+            else backward_edge = true;
             // Assert that we found a valid path
             assert(curr_edge);
 
@@ -146,80 +245,6 @@ public:
         return cost;
     }
 
-    // TODO: check potentials again
-    // ld shortest_path(vector<ld> &pi) {
-    // /*
-    //  * Finds the shortest path using Dijkstra with potentials (Johnson's algorithm)
-    //  * Sends 1 unit of flow along this path and updates edge flows and costs
-    //  *
-    //  * returns -1 if no path is found, otherwise returns total cost of the path
-    //  */
-    //     using T = pair<ld, int>; // (distance, node)
-    //     priority_queue<T, vector<T>, greater<T>> pq;
-    //
-    //     vector<ld> dist(n, INF);
-    //     vector<int> prev(n, -1); // previous node
-    //     vector<shared_ptr<Edge>> how(n, nullptr); // edge used to reach node
-    //
-    //     dist[src_idx] = 0;
-    //     pq.emplace(0, src_idx);
-    //
-    //     while (!pq.empty()) {
-    //         auto [d, u] = pq.top();
-    //         pq.pop();
-    //         if (d > dist[u]) continue;
-    //
-    //         for (auto &e : adj[u]) {
-    //             // Forward edge
-    //             if (e->from == u && e->curr < e->capacity) {
-    //                 int v = e->to;
-    //                 ld reduced_cost = e->cost + pi[u] - pi[v];
-    //                 if (dist[u] + reduced_cost < dist[v]) {
-    //                     dist[v] = dist[u] + reduced_cost;
-    //                     prev[v] = u;
-    //                     how[v] = e;
-    //                     pq.emplace(dist[v], v);
-    //                 }
-    //             }
-    //             // Backward edge
-    //             if (e->to == u && e->curr > 0) {
-    //                 int v = e->from;
-    //                 ld reduced_cost = -e->cost + pi[u] - pi[v];
-    //                 if (dist[u] + reduced_cost < dist[v]) {
-    //                     dist[v] = dist[u] + reduced_cost;
-    //                     prev[v] = u;
-    //                     how[v] = e;
-    //                     pq.emplace(dist[v], v);
-    //                 }
-    //             }
-    //         }
-    //     }
-    //
-    //     if (dist[target_idx] >= INF) return -1;
-    //
-    //     // Update potentials
-    //     for (int i = 0; i < n; i++) {
-    //         if (dist[i] < INF) pi[i] += dist[i];
-    //     }
-    //
-    //     // Update edges along the path
-    //     ld path_cost = 0;
-    //     int curr = target_idx;
-    //     while (curr != src_idx) {
-    //         auto e = how[curr];
-    //         int u = prev[curr];
-    //         if (e->from == u && e->to == curr) {
-    //             e->curr++;
-    //             path_cost += e->cost;
-    //         } else {
-    //             e->curr--;
-    //             path_cost -= e->cost;
-    //         }
-    //         curr = u;
-    //     }
-    //     return path_cost;
-    // }
-
 
 
     ld min_cost_max_flow() {
@@ -228,7 +253,7 @@ public:
         ld total_cost = 0;
         ld cost = 0;
         int cnt = 0;
-        vector<ld> pi(n, INF);
+        vector<ld> pi(n, 0);
         vector<int> prev(n, -1);
 
         // Run Bellman-Ford to calculate a potential
@@ -236,27 +261,27 @@ public:
         pi[this->src_idx] = 0; // src node should have 0 dist
 
         // Run Bellman-Ford
-        for (int iter = 0; iter < n; iter++) {
-            for (int i = 0; i < n; i++) {
-                for (shared_ptr<Edge> &edge : adj[i]) {
-                    // Test the forward edge from i->v
-                    if (edge->from == i && edge->curr < edge->capacity) {
-                        if (pi[i] + edge->cost < pi[edge->to]) {
-                            pi[edge->to] = pi[i] + edge->cost;
-                            prev[edge->to] = i;
-                        }
-                    }
-
-                    // Test the backward edge from v->i
-                    if (edge->to == i && edge->curr > 0) {
-                        if (pi[i] - edge->cost < pi[edge->from]) {
-                            pi[edge->from] = pi[i] - edge->cost;
-                            prev[edge->from] = i;
-                        }
-                    }
-                }
-            }
-        }
+        // for (int iter = 0; iter < n; iter++) {
+        //     for (int i = 0; i < n; i++) {
+        //         for (shared_ptr<Edge> &edge : adj[i]) {
+        //             // Test the forward edge from i->v
+        //             if (edge->from == i && edge->curr < edge->capacity) {
+        //                 if (pi[i] + edge->cost < pi[edge->to]) {
+        //                     pi[edge->to] = pi[i] + edge->cost;
+        //                     prev[edge->to] = i;
+        //                 }
+        //             }
+        //
+        //             // Test the backward edge from v->i
+        //             if (edge->to == i && edge->curr > 0) {
+        //                 if (pi[i] - edge->cost < pi[edge->from]) {
+        //                     pi[edge->from] = pi[i] - edge->cost;
+        //                     prev[edge->from] = i;
+        //                 }
+        //             }
+        //         }
+        //     }
+        // }
 
         while ((cost = shortest_path(pi)) != -1) {
             total_cost += cost;
@@ -620,7 +645,7 @@ public:
             // Run MCMF
             vector<int> city_indices = generate_indices(problem.N);
             vector<int> group_sizes = problem.group_sizes;
-            vector<vector<int>> curr_groups = general_mcmf(city_indices, group_sizes, prev_group_centers, 15);
+            vector<vector<int>> curr_groups = general_mcmf(city_indices, group_sizes, prev_group_centers, -1);
             bool done_flag = false;
             if (prev_groups == curr_groups) {
                 cerr << "Done MCMF K-means after " << iter << " iterations.\n";
@@ -713,12 +738,12 @@ public:
                     city_indices[i] = groups[group_idx][i];
                 }
 
-                vector<vector<int>> curr_clusters = general_mcmf(city_indices, cluster_sizes, prev_cluster_centers, 15);
+                vector<vector<int>> curr_clusters = general_mcmf(city_indices, cluster_sizes, prev_cluster_centers, -1);
                 curr_clusters = convert_city_indices(curr_clusters, city_indices);
 
                 bool done_flag = false;
                 if (prev_clusters == curr_clusters) {
-                    cerr << "Done mini-clustering MCMF K-means after " << iter << " iterations.\n";
+                    // cerr << "Done mini-clustering MCMF K-means after " << iter << " iterations.\n";
                     done_flag = true;
                 }
                 // cerr << "Done MCMF iteration " << iter << '\n';
@@ -1368,5 +1393,8 @@ add optimization for mcmf, make only edges for each city to 10-15 nearest cities
 5358 5640 8585 8867
 3218 3684 3330 3796
 3218 3684 3330 3796
+
+
+run k-means first, then start with mcmf?
 
 */
