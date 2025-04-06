@@ -544,8 +544,8 @@ public:
     void mst() {
         // Generate MST
 
-        // vector<vector<int>> groups = KMeans(50, 10);
-        vector<vector<int>> groups = mcmf_clustering(10);
+        vector<vector<int>> groups = KMeans(50, 10);
+        // groups = mcmf_clustering(2, groups);
 
         vector<vector<pii>> edges(problem.M);
         // Query, then save the edges of the MST
@@ -554,7 +554,7 @@ public:
         // WITH MINI-CLUSTERING --------------------------------------------------------
         // vector<vector<vector<int>>> clustered_groups = miniClusteringKMeans(groups, 10);
         // cout << "Got here3\n";
-        vector<vector<vector<int>>> clustered_groups = mcmf_mini_clustering(groups, 10);
+        vector<vector<vector<int>>> clustered_groups = mcmf_mini_clustering(groups, 5);
 
         for (int i = 0; i < problem.M; i++) {
             int prev_group_idx = -1; // One representative node in the prev subset
@@ -618,34 +618,46 @@ public:
 
     }
 
-    vector<vector<int>> mcmf_clustering(int num_iters) {
+    vector<vector<int>> mcmf_clustering(int num_iters, vector<vector<int>> &prev_groups) {
         /* Uses K-means with mcmf for better clustering
          * Does a max of num_iters soft K-means
+         *
          *
          */
 
         // Initialize all group centers (just generate random points on the border)
-        uniform_real_distribution<ld> random_pt(0, 10000);
-        vector<pair<ld, ld>> prev_group_centers(problem.M);
-        for (int i = 0; i < problem.M; i++) {
+        // uniform_real_distribution<ld> random_pt(0, 10000);
+        // vector<pair<ld, ld>> prev_group_centers(problem.M);
+        // for (int i = 0; i < problem.M; i++) {
             // Initialize to a random point on the border
             // prev_group_centers[i] = generate_border_point();
-            prev_group_centers[i] = {random_pt(rng), random_pt(rng)};
+            // prev_group_centers[i] = {random_pt(rng), random_pt(rng)};
             // cerr << "group center " << i << ": " << prev_group_centers[i].first << ", " << prev_group_centers[i].second << '\n';
+        // }
+
+        // calculate the group centers
+        vector<pair<ld, ld>> prev_group_centers(problem.M);
+        for (int group_idx = 0; group_idx < problem.M; group_idx++) {
+            ld center_x = 0, center_y = 0;
+            for (int city_idx : prev_groups[group_idx]) {
+                center_x += problem.cities[city_idx].cx;
+                center_y += problem.cities[city_idx].cy;
+            }
+            prev_group_centers[group_idx] = {center_x, center_y};
         }
 
         // This is where we store the group assignments
-        vector<vector<int>> prev_groups(problem.M);
-        for (int group_idx = 0; group_idx < problem.M; group_idx++) {
-            prev_groups[group_idx].resize(problem.group_sizes[group_idx]);
-        }
+        // vector<vector<int>> prev_groups(problem.M);
+        // for (int group_idx = 0; group_idx < problem.M; group_idx++) {
+        //     prev_groups[group_idx].resize(problem.group_sizes[group_idx]);
+        // }
 
         // Main k-means loop --------------------------------------------------------
         for (int iter = 0; iter < num_iters; iter++) {
             // Run MCMF
             vector<int> city_indices = generate_indices(problem.N);
             vector<int> group_sizes = problem.group_sizes;
-            vector<vector<int>> curr_groups = general_mcmf(city_indices, group_sizes, prev_group_centers, -1);
+            vector<vector<int>> curr_groups = general_mcmf(city_indices, group_sizes, prev_group_centers, 50);
             bool done_flag = false;
             if (prev_groups == curr_groups) {
                 cerr << "Done MCMF K-means after " << iter << " iterations.\n";
@@ -738,7 +750,7 @@ public:
                     city_indices[i] = groups[group_idx][i];
                 }
 
-                vector<vector<int>> curr_clusters = general_mcmf(city_indices, cluster_sizes, prev_cluster_centers, -1);
+                vector<vector<int>> curr_clusters = general_mcmf(city_indices, cluster_sizes, prev_cluster_centers, 25);
                 curr_clusters = convert_city_indices(curr_clusters, city_indices);
 
                 bool done_flag = false;
@@ -789,8 +801,8 @@ public:
          * Note: returns the indices with respect to city_indices. need to turn it back to city_indices afterwards
          */
 
-        cerr << "Currently evaluating |city_indices| = " << city_indices.size() << ", |cluster_sizes| = " << cluster_sizes.size() << '\n';
-        cerr << "curr depth is " << depth << '\n';
+        // cerr << "Currently evaluating |city_indices| = " << city_indices.size() << ", |cluster_sizes| = " << cluster_sizes.size() << '\n';
+        // cerr << "curr depth is " << depth << '\n';
         depth++;
 
         int num_cities = city_indices.size();

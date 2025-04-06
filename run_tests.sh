@@ -7,7 +7,7 @@ echo "Running for $1 iterations per test"
 
 for ((i = 0; i < 10; i++)) ; do
 #    echo "${i}:"
-    RESULT=$(cargo run -r --bin tester ../main < in/000${i}.txt 2>&1 1> ../outputs/out${i}.txt | tail -n 1)
+    time RESULT=$(cargo run -r --bin tester ../main < in/000${i}.txt 2>&1 1> ../outputs/out${i}.txt | tail -n 1)
     echo "${i}:" "$RESULT"
 done
 
